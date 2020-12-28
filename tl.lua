@@ -738,6 +738,7 @@ local tl = { GenerateOptions = {}, CheckOptions = {}, Env = {}, Result = {}, Err
 
 
 
+
 local TypeReporter = {}
 
 
@@ -5329,17 +5330,18 @@ local spaced_op = {
    },
 }
 
-
 local default_generate_opts = {
    preserve_indent = true,
    preserve_newlines = true,
    preserve_hashbang = false,
+   output_comments = false,
 }
 
 local fast_generate_opts = {
    preserve_indent = false,
    preserve_newlines = true,
    preserve_hashbang = false,
+   output_comments = false,
 }
 
 local primitive = {
@@ -5493,6 +5495,30 @@ function tl.generate(ast, gen_target, opts)
          return out
       end,
    }
+
+   local function comment_to_output(comment)
+      local text = comment.text
+      local h = 0
+      for _nl in text:gmatch("\n") do
+         h = h + 1
+      end
+      return { y = comment.y, h = h, text }
+   end
+
+   if opts.output_comments then
+      visit_node.after = function(_, node, _children, ret)
+         if node.comment_after then
+            local out = comment_to_output(node.comment_after)
+            add_child(ret, out, " ", indent)
+         end
+         if node.comment_before then
+            local code = ret
+            ret = comment_to_output(node.comment_before)
+            add_child(ret, code, nil, indent)
+         end
+         return ret
+      end
+   end
 
    visit_node.cbs = {
       ["statements"] = {
