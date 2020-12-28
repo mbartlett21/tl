@@ -813,7 +813,8 @@ commands["gen"] = function(tlconfig, args)
          pp_opts = {
             preserve_indent = true,
             preserve_newlines = true,
-            preserve_hashbang = args["keep_hashbang"]
+            preserve_hashbang = args["keep_hashbang"],
+            output_comments = false, -- true,
          }
       end
 
