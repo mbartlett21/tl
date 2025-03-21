@@ -482,6 +482,26 @@ end
 
 ]=====]
 
+local interface StringF
+   format: function(self, ...: any): string = macroexp(self: StringF, ...: any): string
+      return (self as string):format(...)
+   end
+   as_string: function(self): string = macroexp(self: StringF): string
+      return self as string
+   end
+   metamethod __concat: function(StringF, StringF): StringF = macroexp(lhs: StringF, rhs: StringF): StringF
+      return lhs .. rhs
+   end
+end
+
+local macroexp replace_percent(s: string): StringF
+   return s:gsub("%%", "%%%%") as StringF
+end
+
+local macroexp stringf(s: string): StringF
+   return s as StringF
+end
+
 local interface Where
    f: string
    y: integer
@@ -493,6 +513,15 @@ local record Errors
    errors: {Error}
    warnings: {Error}
    unknown_dots: {string:boolean}
+
+   invalid_at: function(self, Where, string): InvalidType
+   invalid_at: function(self, Where, StringF, Type, ...: Type): InvalidType
+
+   add: function(self, Where, string)
+   add: function(self, Where, StringF, Type, ...: Type)
+
+   add_in_context: function(self, Where, Node, string)
+   add_in_context: function(self, Where, Node, StringF, Type, ...:Type)
 end
 
 local record tl
@@ -4635,7 +4664,7 @@ local function tl_debug_loc(y: integer, x: integer): string
    return (tostring(y) or "?") .. ":" .. (tostring(x) or "?")
 end
 
-local function tl_debug_indent_push(mark: string, y: integer, x: integer, fmt: string, ...: any)
+local function tl_debug_indent_push(mark: string, y: integer, x: integer, fmt: StringF, ...: any)
    if tl_debug_entry then
       if tl_debug_entry.y and (tl_debug_entry.y > tl_debug_y) then
          io.stderr:write("\n")
@@ -4656,7 +4685,7 @@ local function tl_debug_indent_push(mark: string, y: integer, x: integer, fmt: s
    }
 end
 
-local function tl_debug_indent_pop(mark: string, single: string, y: integer, x: integer, fmt?: string, ...: any)
+local function tl_debug_indent_pop(mark: string, single: string, y: integer, x: integer, fmt?: StringF, ...: any)
    if tl_debug_entry then
       local msg = tl_debug_entry.msg
       if fmt then
@@ -4810,7 +4839,7 @@ recurse_type = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type,
    local kind = ast.typename
 
    if TL_DEBUG then
-      tl_debug_indent_push("---", ast.y, ast.x, "[%s] = %s", kind, show_type(ast))
+      tl_debug_indent_push("---", ast.y, ast.x, stringf"[%s] = %s", kind, show_type(ast))
    end
 
    local cbs = visit.cbs
@@ -5099,7 +5128,7 @@ local function recurse_node<S, T>(s: S, root: tl.Node,
          kprint = kind == "op" and "op " .. ast.op.op
                   or kind == "identifier" and "identifier " .. ast.tk
                   or kind
-         tl_debug_indent_push("{{{", ast.y, ast.x, "[%s]", kprint)
+         tl_debug_indent_push("{{{", ast.y, ast.x, stringf"[%s]", kprint)
       end
 
       local fn = walkers[kind]
@@ -5120,7 +5149,7 @@ local function recurse_node<S, T>(s: S, root: tl.Node,
 
       if TL_DEBUG then
          local typ = ast.debug_type and " = " .. show_type(ast.debug_type) or ""
-         tl_debug_indent_pop("}}}", "***", ast.y, ast.x, "[%s]%s", kprint, typ)
+         tl_debug_indent_pop("}}}", "***", ast.y, ast.x, stringf"[%s]%s", kprint, typ)
       end
 
       return ret
@@ -6356,7 +6385,7 @@ function Errors.new(filename: string): Errors
    return setmetatable(self, { __index = Errors })
 end
 
-local function Err(msg: string, t1?: Type, t2?: Type, t3?: Type): Error
+local function Err(msg: StringF, t1: Type, t2?: Type, t3?: Type): Error
    if t1 then
       local s1, s2, s3: string, string, string
       if t1 is InvalidType then
@@ -6375,9 +6404,8 @@ local function Err(msg: string, t1?: Type, t2?: Type, t3?: Type): Error
          end
          s3 = show_type(t3)
       end
-      msg = msg:format(s1, s2, s3)
       return {
-         msg = msg,
+         msg = msg:as_string():format(s1, s2, s3),
          x = t1.x,
          y = t1.y,
          filename = t1.f,
@@ -6385,8 +6413,12 @@ local function Err(msg: string, t1?: Type, t2?: Type, t3?: Type): Error
    end
 
    return {
-      msg = msg,
+      msg = msg as string,
    }
+end
+
+local macroexp Err1(msg: string): Error
+   return Err(msg as StringF)
 end
 
 local function Err_at(w: Where, msg: string): Error
@@ -6410,8 +6442,8 @@ local function insert_error(self: Errors, y: integer, x: integer, f: string, err
    table.insert(self.errors, err)
 end
 
-function Errors:add(w: Where, msg: string, ...:Type)
-   local e = Err(msg, ...)
+Errors.add = function(self: Errors, w: Where, msg: StringF | string, ...:Type)
+   local e = Err(msg as StringF, ...)
    if e then
       insert_error(self, w.y, w.x, w.f, e)
    end
@@ -6434,11 +6466,11 @@ function Errors:get_context(ctx: Node|string, name?: string): string
    return (cn and cn .. ": " or "") .. (ec and ec.name and ec.name .. ": " or "") .. (name and name .. ": " or "")
 end
 
-function Errors:add_in_context(w: Where, ctx: Node, msg: string, ...:Type)
+Errors.add_in_context = function(self: Errors, w: Where, ctx: Node, msg: string|StringF, ...:Type)
    local prefix = self:get_context(ctx)
-   msg = prefix .. msg
+   msg = ((...) and replace_percent(prefix) or prefix as StringF) .. msg as StringF
 
-   local e = Err(msg, ...)
+   local e = Err(msg as StringF, ...)
    if e then
       insert_error(self, w.y, w.x, w.f, e)
    end
@@ -6451,7 +6483,7 @@ function Errors:collect(errs: {Error})
    end
 end
 
-function Errors:add_warning(tag: WarningKind, w: Where, fmt: string, ...: any)
+function Errors:add_warning(tag: WarningKind, w: Where, fmt: StringF, ...: any)
    assert(w.y)
    table.insert(self.warnings, {
       y = w.y,
@@ -6462,21 +6494,21 @@ function Errors:add_warning(tag: WarningKind, w: Where, fmt: string, ...: any)
    })
 end
 
-function Errors:invalid_at(w: Where, msg: string, ...:Type): InvalidType
-   self:add(w, msg, ...)
+Errors.invalid_at = function(self: Errors, w: Where, msg: StringF|string, ...:Type): InvalidType
+   self:add(w, msg as StringF, ...)
    return an_invalid(w)
 end
 
 function Errors:add_unknown(node: Node, name: string)
-   self:add_warning("unknown", node, "unknown variable: %s", name)
+   self:add_warning("unknown", node, stringf"unknown variable: %s", name)
 end
 
 function Errors:redeclaration_warning(at: Where, var_name: string, var_kind: string, old_var?: Variable)
    if var_name:sub(1, 1) == "_" then return end
 
-   local short_error = var_kind .. " shadows previous declaration of '%s'"
+   local short_error = stringf(var_kind) .. stringf" shadows previous declaration of '%s'"
    if old_var and old_var.declared_at then
-      self:add_warning("redeclaration", at, short_error .. " (originally declared at %d:%d)", var_name, old_var.declared_at.y, old_var.declared_at.x)
+      self:add_warning("redeclaration", at, short_error .. stringf" (originally declared at %d:%d)", var_name, old_var.declared_at.y, old_var.declared_at.x)
    else
       self:add_warning("redeclaration", at, short_error, var_name)
    end
@@ -6505,7 +6537,7 @@ function Errors:unused_warning(name: string, var: Variable)
    self:add_warning(
       "unused",
       var.declared_at,
-      "unused %s %s: %s",
+      stringf"unused %s %s: %s",
       user_facing_variable_description(var),
       name,
       show_type(var.t)
@@ -6636,7 +6668,7 @@ function Errors:check_var_usage(scope: Scope, is_global?: boolean)
             self:add_warning(
                "unread",
                u.var.declared_at,
-               "%s %s (of type %s) is never read",
+               stringf"%s %s (of type %s) is never read",
                user_facing_variable_description(u.var),
                u.name,
                show_type(u.var.t)
@@ -6648,7 +6680,7 @@ function Errors:check_var_usage(scope: Scope, is_global?: boolean)
    if scope.labels then
       for name, node in pairs(scope.labels) do
          if not node.used_label then
-            self:add_warning("unused", node, "unused label ::%s::", name)
+            self:add_warning("unused", node, stringf"unused label ::%s::", name)
          end
       end
    end
@@ -6678,7 +6710,7 @@ function Errors:fail_unresolved_nominals(scope: Scope, global_scope: Scope)
             for _, typ in ipairs(types) do
                assert(typ.x)
                assert(typ.y)
-               self:add(typ, "unknown type %s", typ)
+               self:add(typ, stringf"unknown type %s", typ)
             end
          end
       end
@@ -7725,7 +7757,7 @@ do
       end
    end
 
-   local function is_valid_union(typ: UnionType): boolean, string
+   local function is_valid_union(typ: UnionType): boolean, StringF
       -- check for limitations in our union support
       -- due to codegen limitations (we only check with type() so far)
       local n_table_types = 0
@@ -7742,41 +7774,41 @@ do
             if rt.meta_fields and rt.meta_fields["__is"] then
                n_userdata_is_types = n_userdata_is_types + 1
                if n_userdata_types > 0 then
-                  return false, "cannot mix userdata types with and without __is metamethod: %s"
+                  return false, stringf"cannot mix userdata types with and without __is metamethod: %s"
                end
             else
                n_userdata_types = n_userdata_types + 1
                if n_userdata_types > 1 then
-                  return false, "cannot discriminate a union between multiple userdata types: %s"
+                  return false, stringf"cannot discriminate a union between multiple userdata types: %s"
                end
                if n_userdata_is_types > 0 then
-                  return false, "cannot mix userdata types with and without __is metamethod: %s"
+                  return false, stringf"cannot mix userdata types with and without __is metamethod: %s"
                end
             end
          elseif ut == "table" then
             if rt is RecordLikeType and rt.meta_fields and rt.meta_fields["__is"] then
                n_table_is_types = n_table_is_types + 1
                if n_table_types > 0 then
-                  return false, "cannot mix table types with and without __is metamethod: %s"
+                  return false, stringf"cannot mix table types with and without __is metamethod: %s"
                end
             else
                n_table_types = n_table_types + 1
                if n_table_types > 1 then
-                  return false, "cannot discriminate a union between multiple table types: %s"
+                  return false, stringf"cannot discriminate a union between multiple table types: %s"
                end
                if n_table_is_types > 0 then
-                  return false, "cannot mix table types with and without __is metamethod: %s"
+                  return false, stringf"cannot mix table types with and without __is metamethod: %s"
                end
             end
          elseif ut == "function" then
             n_function_types = n_function_types + 1
             if n_function_types > 1 then
-               return false, "cannot discriminate a union between multiple function types: %s"
+               return false, stringf"cannot discriminate a union between multiple function types: %s"
             end
          elseif ut == "enum" or (ut == "string" and not has_primitive_string_type) then
             n_string_enum = n_string_enum + 1
             if n_string_enum > 1 then
-               return false, "cannot discriminate a union between multiple string/enum types: %s"
+               return false, stringf"cannot discriminate a union between multiple string/enum types: %s"
             end
             if ut == "string" then
                has_primitive_string_type = true
@@ -8503,7 +8535,7 @@ do
          for fname, ftype in pairs(rec.meta_fields) do
             if ret.fields[fname] then
                if not self:is_a(ftype, ret.fields[fname]) then
-                  self.errs:add(ftype, fname .. " does not follow metatable contract: got %s, expected %s", ftype, ret.fields[fname])
+                  self.errs:add(ftype, replace_percent(fname) .. stringf" does not follow metatable contract: got %s, expected %s", ftype, ret.fields[fname])
                end
             end
             ret.fields[fname] = ftype
@@ -8512,7 +8544,7 @@ do
 
       local function match_typevals(self: TypeChecker, t: NominalType, def: GenericType): Type
          if not t.typevals then
-            self.errs:add(t, "missing type arguments in %s", def)
+            self.errs:add(t, stringf"missing type arguments in %s", def)
             return nil
          elseif #t.typevals ~= #def.typeargs then
             self.errs:add(t, "mismatch in number of type arguments")
@@ -8538,7 +8570,7 @@ do
 
          local found = t.found or self:find_type(t.names)
          if not found then
-            return self.errs:invalid_at(t, "unknown type %s", t)
+            return self.errs:invalid_at(t, stringf"unknown type %s", t)
          end
 
          if found is TypeDeclType and found.is_alias then
@@ -8717,7 +8749,7 @@ do
                t2name = t2name .. " (defined in " .. t2.found.f .. ":" .. t2.found.y .. ")"
             end
          end
-         return false, { Err(t1name .. " is not a " .. t2name) }
+         return false, { Err1(t1name .. " is not a " .. t2name) }
       end
 
       local function nominal_found_type(self: TypeChecker, nom: NominalType): Type
@@ -8746,10 +8778,10 @@ do
             end
 
             if not t1f then
-               self.errs:add(t1, "unknown type %s", t1)
+               self.errs:add(t1, stringf"unknown type %s", t1)
             end
             if not t2f then
-               self.errs:add(t2, "unknown type %s", t2)
+               self.errs:add(t2, stringf"unknown type %s", t2)
             end
             return false, {} -- errors were already produced
          end
@@ -8875,7 +8907,7 @@ do
       for i = 2, #tupletype.types do
          local expanded = self:expand_type(w, arr_type, an_array(w, tupletype.types[i]))
          if not expanded is ArrayType then
-            return nil, { Err("unable to convert tuple %s to array", tupletype) }
+            return nil, { Err(stringf"unable to convert tuple %s to array", tupletype) }
          end
          arr_type = expanded
       end
@@ -8904,7 +8936,7 @@ do
          -- constant array, check elements (useful for array of enums)
          for _, e in ipairs(a.consttypes) do
             if not self:is_a(e, b.elements) then
-               return false, { Err("%s is not a member of %s", e, b.elements) }
+               return false, { Err(stringf"%s is not a member of %s", e, b.elements) }
             end
          end
       end
@@ -8929,12 +8961,12 @@ do
       -- assert(b.typename == "record")
       if a.elements and b.elements then
          if not self:is_a(a.elements, b.elements) then
-            return false, { Err("array parts have incompatible element types") }
+            return false, { Err1("array parts have incompatible element types") }
          end
       end
 
       if a.is_userdata ~= b.is_userdata then
-         return false, { Err(a.is_userdata and "userdata is not a record"
+         return false, { Err1(a.is_userdata and "userdata is not a record"
                                               or  "record is not a userdata") }
       end
 
@@ -8962,7 +8994,7 @@ do
    function TypeChecker:eqtype_record(a: RecordType, b: RecordType): boolean, {Error}
       -- checking array interface
       if (a.elements ~= nil) ~= (b.elements ~= nil) then
-         return false, { Err("types do not have the same array interface") }
+         return false, { Err1("types do not have the same array interface") }
       end
       if a.elements then
          local ok, errs = self:same_type(a.elements, b.elements)
@@ -9029,7 +9061,7 @@ do
          -- but check interface constraint first if present
          if constraint then
             if not self:is_a(other, constraint) then
-               return false, { Err("given type %s does not satisfy %s constraint in type variable " .. display_typevar(typevar, "typevar"), other, constraint) }
+               return false, { Err(stringf"given type %s does not satisfy %s constraint in type variable " .. replace_percent(display_typevar(typevar, "typevar")), other, constraint) }
             end
 
             if self:same_type(other, constraint) then
@@ -9093,7 +9125,7 @@ do
 
    local function compare_true_inferring_emptytable_if_not_userdata(self: TypeChecker, a: RecordLikeType, b: EmptyTableType): boolean, {Error}
       if a.is_userdata then
-         return false, { Err("{} cannot be used with userdata type %s", a) }
+         return false, { Err(stringf"{} cannot be used with userdata type %s", a) }
       end
       return compare_true_inferring_emptytable(self, a, b)
    end
@@ -9161,11 +9193,11 @@ do
          ["tupletable"] = function(self: TypeChecker, a: TupleTableType, b: TupleTableType): boolean, {Error}
             for i = 1, math.min(#a.types, #b.types) do
                if not self:same_type(a.types[i], b.types[i]) then
-                  return false, { Err("in tuple entry " .. tostring(i) .. ": got %s, expected %s", a.types[i], b.types[i]) }
+                  return false, { Err(stringf("in tuple entry " .. tostring(i) .. ": got %s, expected %s"), a.types[i], b.types[i]) }
                end
             end
             if #a.types ~= #b.types then
-               return false, { Err("tuples have different size", a, b) }
+               return false, { Err(stringf"tuples have different size", a, b) }
             end
             return true
          end,
@@ -9212,13 +9244,13 @@ do
             local naargs, nbargs = #a.args.tuple, #b.args.tuple
             if naargs ~= nbargs then
                if (not not a.is_method) ~= (not not b.is_method) then
-                  return false, { Err("different number of input arguments: method and non-method are not the same type") }
+                  return false, { Err1("different number of input arguments: method and non-method are not the same type") }
                end
-               return false, { Err("different number of input arguments: got " .. naargs - argdelta .. ", expected " .. nbargs - argdelta) }
+               return false, { Err1("different number of input arguments: got " .. naargs - argdelta .. ", expected " .. nbargs - argdelta) }
             end
             local narets, nbrets = #a.rets.tuple, #b.rets.tuple
             if narets ~= nbrets then
-               return false, { Err("different number of return values: got " .. narets .. ", expected " .. nbrets) }
+               return false, { Err1("different number of return values: got " .. narets .. ", expected " .. nbrets) }
             end
             local errs = {}
             for i = 1, naargs do
@@ -9333,7 +9365,7 @@ do
             if self:exists_supertype_in(b, a) then                                      -- ───────────────
                return true                                                              --   a poly <: b
             end
-            return false, { Err("cannot match against any alternatives of the polymorphic type") }
+            return false, { Err1("cannot match against any alternatives of the polymorphic type") }
          end,
       },
       ["nominal"] = {
@@ -9378,14 +9410,14 @@ do
       ["string"] = {
          ["enum"] = function(_self: TypeChecker, a: StringType, b: EnumType): boolean, {Error}
             if not a.literal then
-               return false, { Err("%s is not a %s", a, b) }
+               return false, { Err(stringf"%s is not a %s", a, b) }
             end
 
             if b.enumset[a.literal] then
                return true
             end
 
-            return false, { Err("%s is not a member of %s", a, b) }
+            return false, { Err(stringf"%s is not a member of %s", a, b) }
          end,
       },
       ["integer"] = {
@@ -9410,13 +9442,13 @@ do
          ["tupletable"] = function(self: TypeChecker, a: TupleTableType, b: TupleTableType): boolean, {Error}
             for i = 1, math.min(#a.types, #b.types) do
                if not self:is_a(a.types[i], b.types[i]) then
-                  return false, { Err("in tuple entry "
-                     .. tostring(i) .. ": got %s, expected %s",
+                  return false, { Err(stringf("in tuple entry "
+                     .. tostring(i) .. ": got %s, expected %s"),
                      a.types[i], b.types[i]) }
                end
             end
             if #a.types > #b.types then
-               return false, { Err("tuple %s is too big for tuple %s", a, b) }
+               return false, { Err(stringf"tuple %s is too big for tuple %s", a, b) }
             end
             return true
          end,
@@ -9427,21 +9459,21 @@ do
          end,
          ["array"] = function(self: TypeChecker, a: TupleTableType, b: ArrayType): boolean, {Error}
             if b.inferred_len and b.inferred_len > #a.types then
-               return false, { Err("incompatible length, expected maximum length of " .. tostring(#a.types) .. ", got " .. tostring(b.inferred_len)) }
+               return false, { Err1("incompatible length, expected maximum length of " .. tostring(#a.types) .. ", got " .. tostring(b.inferred_len)) }
             end
             local aa, err = self:arraytype_from_tuple(a.inferred_at or a, a)
             if not aa then
                return false, err
             end
             if not self:is_a(aa, b) then
-               return false, { Err("got %s (from %s), expected %s", aa, a, b) }
+               return false, { Err(stringf"got %s (from %s), expected %s", aa, a, b) }
             end
             return true
          end,
          ["map"] = function(self: TypeChecker, a: TupleTableType, b: MapType): boolean, {Error}
             local aa = self:arraytype_from_tuple(a.inferred_at or a, a)
             if not aa then
-               return false, { Err("Unable to convert tuple %s to map", a) }
+               return false, { Err(stringf"Unable to convert tuple %s to map", a) }
             end
 
             return compare_map(self, a_type(a, "integer", {}), b.keys, aa.elements, b.values)
@@ -9462,16 +9494,16 @@ do
          ["array"] = TypeChecker.subtype_array,
          ["map"] = function(self: TypeChecker, a: RecordType, b: MapType): boolean, {Error}
             if not self:is_a(b.keys, a_type(b, "string", {})) then
-               return false, { Err("can't match a record to a map with non-string keys") }
+               return false, { Err1("can't match a record to a map with non-string keys") }
             end
 
             for _, k in ipairs(a.field_order) do
                local bk = b.keys
                if bk is EnumType and not bk.enumset[k] then
-                  return false, { Err("key is not an enum value: " .. k) }
+                  return false, { Err1("key is not an enum value: " .. k) }
                end
                if not self:is_a(a.fields[k], b.values) then
-                  return false, { Err("record is not a valid map; not all fields have the same type") }
+                  return false, { Err1("record is not a valid map; not all fields have the same type") }
                end
             end
 
@@ -9497,14 +9529,14 @@ do
          ["tupletable"] = function(self: TypeChecker, a: ArrayType, b: TupleTableType): boolean, {Error}
             local alen = a.inferred_len or 0
             if alen > #b.types then
-               return false, { Err("incompatible length, expected maximum length of " .. tostring(#b.types) .. ", got " .. tostring(alen)) }
+               return false, { Err1("incompatible length, expected maximum length of " .. tostring(#b.types) .. ", got " .. tostring(alen)) }
             end
 
             -- for array literals (which is the only case where inferred_len is defined),
             -- only check the entries that are present
             for i = 1, (alen > 0) and alen or #b.types do
                if not self:is_a(a.elements, b.types[i]) then
-                  return false, { Err("tuple entry " .. i .. " of type %s does not match type of array elements, which is %s", b.types[i], a.elements) }
+                  return false, { Err(stringf("tuple entry " .. i .. " of type %s does not match type of array elements, which is %s"), b.types[i], a.elements) }
                end
             end
             return true
@@ -9531,7 +9563,7 @@ do
 
             local aa, ba = a.args.tuple, b.args.tuple
             if (not b.args.is_va) and (self.feat_arity and (#aa > #ba and a.min_arity > b.min_arity)) then
-               table.insert(errs, Err("incompatible number of arguments: got " .. show_arity(a) .. " %s, expected " .. show_arity(b) .. " %s", a.args, b.args))
+               table.insert(errs, Err(stringf("incompatible number of arguments: got " .. show_arity(a) .. " %s, expected " .. show_arity(b) .. " %s"), a.args, b.args))
             else
                for i = ((a.is_method or b.is_method) and 2 or 1), #aa do
                   local ai = aa[i]
@@ -9545,7 +9577,7 @@ do
             local ar, br = a.rets.tuple, b.rets.tuple
             local diff_by_va = #br - #ar == 1 and b.rets.is_va
             if #ar < #br and not diff_by_va then
-               table.insert(errs, Err("incompatible number of returns: got " .. #ar .. " %s, expected " .. #br .. " %s", a.rets, b.rets))
+               table.insert(errs, Err(stringf("incompatible number of returns: got " .. #ar .. " %s, expected " .. #br .. " %s"), a.rets, b.rets))
             else
                local nrets = #br
                if diff_by_va then
@@ -9594,7 +9626,7 @@ do
          ["any"] = compare_true,
          ["boolean_context"] = compare_true,
          ["emptytable"] = function(_self: TypeChecker, a: Type, _b: EmptyTableType): boolean, {Error}
-            return false, { Err("assigning %s to a variable declared with {}", a) }
+            return false, { Err(stringf"assigning %s to a variable declared with {}", a) }
          end,
          ["unresolved_emptytable_value"] = function(self: TypeChecker, a: Type, b: UnresolvedEmptyTableValueType): boolean, {Error}
             infer_emptytable_from_unresolved_value(self, b, b, a)
@@ -9632,7 +9664,7 @@ do
          ["poly"] = function(self: TypeChecker, a: Type, b: PolyType): boolean, {Error} -- ∀ t ∈ b, a <: t
             for _, t in ipairs(b.types) do                                              -- ───────────────
                if not self:is_a(a, t) then                                              --   a <: b poly
-                  return false, { Err("cannot match against all alternatives of the polymorphic type") }
+                  return false, { Err1("cannot match against all alternatives of the polymorphic type") }
                end
             end
             return true
@@ -10088,7 +10120,7 @@ do
                return true
             end
             if cm == "plain" then
-               self.errs:add_warning("hint", w, "invoked method as a regular function: consider using ':' instead of '.'")
+               self.errs:add_warning("hint", w, stringf"invoked method as a regular function: consider using ':' instead of '.'")
             end
             return false
          end
@@ -10257,7 +10289,7 @@ do
             _, errs = check_call(self, node, e2, func, args, expected_rets, cm, argdelta, or_args, or_rets)
             f, ret = func, or_rets or func.rets
          else
-            ret = self.errs:invalid_at(node, "not a function: %s", func)
+            ret = self.errs:invalid_at(node, stringf"not a function: %s", func)
          end
 
          if errs then
@@ -10375,7 +10407,7 @@ do
       return not not has_any
    end
 
-   function TypeChecker:match_record_key(t: Type, rec: Node, key: string): Type, string
+   function TypeChecker:match_record_key(t: Type, rec: Node, key: string): Type, StringF
       t = self:to_structural(t)
 
       if t is SelfType then
@@ -10390,7 +10422,7 @@ do
 
       if t is TypeDeclType then
          if t.is_nested_alias then
-            return nil, "cannot use a nested type alias as a concrete value"
+            return nil, stringf"cannot use a nested type alias as a concrete value"
          end
          local def = t.def
          if def is NominalType then
@@ -10422,7 +10454,7 @@ do
          end
       end
 
-      local keyg = key:gsub("%%", "%%%%")
+      local keyg = replace_percent(key)
 
       if t is RecordLikeType then
          assert(t.fields, "record has no fields!?")
@@ -10439,24 +10471,24 @@ do
 
          if rec.kind == "variable" then
             if t is InterfaceType then
-               return nil, "invalid key '" .. keyg .. "' in '" .. rec.tk .. "' of interface type %s"
+               return nil, stringf"invalid key '" .. keyg .. stringf"' in '" .. replace_percent(rec.tk) .. stringf"' of interface type %s"
             else
-               return nil, "invalid key '" .. keyg .. "' in record '" .. rec.tk .. "' of type %s"
+               return nil, stringf"invalid key '" .. keyg .. stringf"' in record '" .. replace_percent(rec.tk) .. stringf"' of type %s"
             end
          else
-            return nil, "invalid key '" .. keyg .. "' in type %s"
+            return nil, stringf"invalid key '" .. keyg .. stringf"' in type %s"
          end
       elseif t is EmptyTableType or is_unknown(t) then
          if self.feat_lax then
             return an_unknown(rec)
          end
-         return nil, "cannot index a value of unknown type"
+         return nil, stringf"cannot index a value of unknown type"
       end
 
       if rec.kind == "variable" then
-         return nil, "cannot index key '" .. keyg .. "' in variable '" .. rec.tk .. "' of type %s"
+         return nil, stringf"cannot index key '" .. keyg .. stringf"' in variable '" .. replace_percent(rec.tk) .. stringf"' of type %s"
       else
-         return nil, "cannot index key '" .. keyg .. "' in type %s"
+         return nil, stringf"cannot index key '" .. keyg .. stringf"' in type %s"
       end
    end
 
@@ -10525,7 +10557,7 @@ do
          elseif (not existing_attr) and is_const then
             self.errs:add(node, "global was previously declared as not <" .. node.attribute .. ">: " .. varname)
          elseif valtype and not self:same_type(existing.t, valtype) then
-            self.errs:add(node, "cannot redeclare global with a different type: previous type of " .. varname .. " is %s", existing.t)
+            self.errs:add(node, stringf"cannot redeclare global with a different type: previous type of " .. replace_percent(varname) .. stringf" is %s", existing.t)
          end
          return nil
       end
@@ -10544,7 +10576,7 @@ do
          for _, t in ipairs(node.typeargs) do
             local v = self:find_var(t.typearg, "check_only")
             if not v or not v.used_as_type then
-               self.errs:add(t, "type argument '%s' is not used in function signature", t)
+               self.errs:add(t, stringf"type argument '%s' is not used in function signature", t)
             end
          end
       end
@@ -10649,7 +10681,7 @@ do
          return a
       end
 
-      local errm: string
+      local errm: StringF
       local erra: Type
       local errb: Type
 
@@ -10659,14 +10691,14 @@ do
                return ra.types[bnode.constnum as integer]
             end
 
-            errm, erra = "index " .. tostring(bnode.constnum) .. " out of range for tuple %s", ra
+            errm, erra = stringf("index " .. tostring(bnode.constnum) .. " out of range for tuple %s"), ra
          else
             local array_type = self:arraytype_from_tuple(bnode, ra)
             if array_type then
                return array_type.elements
             end
 
-            errm = "cannot index this tuple with a variable because it would produce a union type that cannot be discriminated at runtime"
+            errm = stringf"cannot index this tuple with a variable because it would produce a union type that cannot be discriminated at runtime"
          end
       elseif ra is SelfType then
          return self:type_check_index(anode, bnode, self:type_of_self(a), b)
@@ -10683,7 +10715,7 @@ do
             } as UnresolvedEmptyTableValueType)
          end
 
-         errm, erra, errb = "inconsistent index type: got %s, expected %s" .. inferred_msg(ra.keys, "type of keys "), b, ra.keys
+         errm, erra, errb = stringf"inconsistent index type: got %s, expected %s" .. replace_percent(inferred_msg(ra.keys, "type of keys ")), b, ra.keys
       elseif ra is UnresolvedEmptyTableValueType then
          local et = a_type(ra, "emptytable", { keys = b } as EmptyTableType)
          infer_emptytable_from_unresolved_value(self, a, ra, et)
@@ -10695,7 +10727,7 @@ do
             return ra.values
          end
 
-         errm, erra, errb = "wrong index type: got %s, expected %s", b, ra.keys
+         errm, erra, errb = stringf"wrong index type: got %s, expected %s", b, ra.keys
       elseif rb is StringType and rb.literal then
          local t, e = self:match_record_key(a, anode, rb.literal)
          if t then
@@ -10721,7 +10753,7 @@ do
             local field_names: {string} = sorted_keys(rb.enumset)
             for _, k in ipairs(field_names) do
                if not ra.fields[k] then
-                  errm, erra = "enum value '" .. k:gsub("%%", "%%%%") .. "' is not a field in %s", ra
+                  errm, erra = stringf"enum value '" .. replace_percent(k) .. stringf"' is not a field in %s", ra
                   break
                end
             end
@@ -10730,12 +10762,12 @@ do
                          "cannot index, not all enum values map to record fields of the same type")
             end
          elseif rb is StringType then
-            errm, erra = "cannot index object of type %s with a string, consider using an enum", a
+            errm, erra = stringf"cannot index object of type %s with a string, consider using an enum", a
          else
-            errm, erra, errb = "cannot index object of type %s with %s", a, b
+            errm, erra, errb = stringf"cannot index object of type %s with %s", a, b
          end
       else
-         errm, erra, errb = "cannot index object of type %s with %s", a, b
+         errm, erra, errb = stringf"cannot index object of type %s with %s", a, b
       end
 
       local meta_t = self:check_metamethod(anode, "__index", ra, b, a, b)
@@ -11109,7 +11141,7 @@ do
                ret[var] = EqFact { var = var, typ = typ, w = f.w, no_infer = true }
             elseif not self:is_a(f.typ, typ) then
                assert(f.fact == "is")
-               self.errs:add_warning("branch", f.w, f.var .. " (of type %s) can never be a %s", show_type(typ), show_type(f.typ))
+               self.errs:add_warning("branch", f.w, replace_percent(f.var) .. stringf" (of type %s) can never be a %s", show_type(typ), show_type(f.typ))
                ret[var] = EqFact { var = var, typ = an_invalid(f.w), w = f.w, no_infer = f.no_infer }
             else
                assert(f.fact == "is")
@@ -11206,7 +11238,7 @@ do
                   -- self.errs:add_warning("branch", f.w, f.var .. " (of type %s) is always a %s", show_type(typ), show_type(f.typ))
                   return { [f.var] = f }
                elseif not self:is_a(f.typ, typ) then
-                  self.errs:add(f.w, f.var .. " (of type %s) can never be a %s", typ, f.typ)
+                  self.errs:add(f.w, replace_percent(f.var) .. stringf" (of type %s) can never be a %s", typ, f.typ)
                   return { [f.var] = invalid_from(f) }
                end
             end
@@ -11596,7 +11628,7 @@ do
          end
          local t = self:to_structural(b.tuple[1])
          if t is ArrayLikeType then
-            self.errs:add_warning("hint", node, "hint: applying pairs on an array: did you intend to apply ipairs?")
+            self.errs:add_warning("hint", node, stringf"hint: applying pairs on an array: did you intend to apply ipairs?")
          end
 
          if not t is MapType then
@@ -11605,9 +11637,9 @@ do
                   self:match_all_record_field_names(node.e2, t, t.field_order,
                      "attempting pairs on a record with attributes of different types")
                   local ct = t is RecordType and "{string:any}" or "{any:any}"
-                  self.errs:add_warning("hint", node.e2, "hint: if you want to iterate over fields of a record, cast it to " .. ct)
+                  self.errs:add_warning("hint", node.e2, stringf("hint: if you want to iterate over fields of a record, cast it to " .. ct))
                else
-                  self.errs:add(node.e2, "cannot apply pairs on values of type: %s", t)
+                  self.errs:add(node.e2, stringf"cannot apply pairs on values of type: %s", t)
                end
             end
          end
@@ -11625,11 +11657,11 @@ do
          if t is TupleTableType then
             local arr_type = self:arraytype_from_tuple(node.e2, t)
             if not arr_type then
-               return self.errs:invalid_at(node.e2, "attempting ipairs on tuple that's not a valid array: %s", orig_t)
+               return self.errs:invalid_at(node.e2, stringf"attempting ipairs on tuple that's not a valid array: %s", orig_t)
             end
          elseif not t is ArrayLikeType then
             if not (self.feat_lax and (is_unknown(t) or t is EmptyTableType)) then
-               return self.errs:invalid_at(node.e2, "attempting ipairs on something that's not an array: %s", orig_t)
+               return self.errs:invalid_at(node.e2, stringf"attempting ipairs on something that's not an array: %s", orig_t)
             end
          end
 
@@ -12336,7 +12368,7 @@ do
                )
             )
             if not ty is TypeDeclType then
-               return self.errs:invalid_at(n.e1, "'require' did not return a type, got %s", ty)
+               return self.errs:invalid_at(n.e1, stringf"'require' did not return a type, got %s", ty)
             end
             if ty.is_alias then
                return self:resolve_typealias(ty)
@@ -12548,7 +12580,7 @@ do
 
                if var.attribute == "close" then
                   if not type_is_closable(t) then
-                     self.errs:add(var, "to-be-closed variable " .. var.tk .. " has a non-closable type %s", t)
+                     self.errs:add(var, stringf"to-be-closed variable " .. replace_percent(var.tk) .. stringf" has a non-closable type %s", t)
                   elseif node.exps and node.exps[i] and expr_is_definitely_not_closable(node.exps[i]) then
                      self.errs:add(var, "to-be-closed variable " .. var.tk .. " assigned a non-closable value")
                   end
@@ -12557,7 +12589,7 @@ do
                assert(var)
                self:add_var(var, var.tk, t, var.attribute, is_localizing_a_variable(node, i) and "localizing")
                if var.elide_type then
-                  self.errs:add_warning("hint", node, "hint: consider using 'local type' instead")
+                  self.errs:add_warning("hint", node, stringf"hint: consider using 'local type' instead")
                end
 
                local infertype = infertypes.tuple[i]
@@ -12598,7 +12630,7 @@ do
 
                self:add_global(var, var.tk, t, is_inferred)
                if var.elide_type then
-                  self.errs:add_warning("hint", node, "hint: consider using 'global type' instead")
+                  self.errs:add_warning("hint", node, stringf"hint: consider using 'global type' instead")
                end
 
                self:dismiss_unresolved(var.tk)
@@ -12622,9 +12654,9 @@ do
                local rvar, rval, err = self:check_assignment(varnode, vartype, valtype)
                if err == "missing" then
                   if #node.exps == 1 and node_is_funcall(node.exps[1]) then
-                     local msg = #valtuple.tuple == 1
+                     local msg = stringf(#valtuple.tuple == 1
                                  and "only 1 value is returned by the function"
-                                 or ("only " .. #valtuple.tuple .. " values are returned by the function")
+                                 or ("only " .. #valtuple.tuple .. " values are returned by the function"))
                      self.errs:add_warning("hint", varnode, msg)
                   end
                end
@@ -12898,7 +12930,11 @@ do
             end
 
             if n_got > n_expected and (not self.feat_lax) and not vatype then
-               self.errs:add(node, what ..": excess return values, expected " .. n_expected .. " %s, got " .. n_got .. " %s", expected, got)
+               self.errs:add(node,
+                  replace_percent(what)
+                     .. stringf(": excess return values, expected " .. n_expected
+                        .. " %s, got " .. n_got .. " %s"),
+                  expected, got)
             end
 
             if n_expected > 1
@@ -12906,7 +12942,10 @@ do
             and node.exps[1].kind == "op"
             and (node.exps[1].op.op == "and" or node.exps[1].op.op == "or")
             and node.exps[1].discarded_tuple then
-               self.errs:add_warning("hint", node.exps[1].e2, "additional return values are being discarded due to '" .. node.exps[1].op.op .. "' expression; suggest parentheses if intentional")
+               self.errs:add_warning("hint", node.exps[1].e2,
+                  stringf"additional return values are being discarded due to '"
+                     .. replace_percent(node.exps[1].op.op)
+                     .. stringf"' expression; suggest parentheses if intentional")
             end
 
             for i = 1, n_got do
@@ -13063,9 +13102,9 @@ do
                elseif decltype is TupleTableType and cktype is NumericType then
                   local dt = decltype.types[n as integer]
                   if not n then
-                     self.errs:add_in_context(node[i], node, "unknown index in tuple %s", decltype)
+                     self.errs:add_in_context(node[i], node, stringf"unknown index in tuple %s", decltype)
                   elseif not dt then
-                     self.errs:add_in_context(node[i], node, "unexpected index " .. n .. " in tuple %s", decltype)
+                     self.errs:add_in_context(node[i], node, stringf("unexpected index " .. n .. " in tuple %s"), decltype)
                   else
                      self:assert_is_a(node[i], cvtype, dt, node, "in tuple: at index " .. tostring(n))
                   end
@@ -13090,7 +13129,7 @@ do
                   self:assert_is_a(node[i].key, cktype, decltype.keys, node, "in map key")
                   self:assert_is_a(node[i].value, cvtype, decltype.values, node, "in map value")
                else
-                  self.errs:add_in_context(node[i], node, "unexpected key of type %s in table of type %s", cktype, decltype)
+                  self.errs:add_in_context(node[i], node, stringf"unexpected key of type %s in table of type %s", cktype, decltype)
                end
             end
 
@@ -13209,7 +13248,7 @@ do
                   if typ is FunctionType then
                      node.is_predeclared_local_function = true
                   elseif not self.feat_lax then
-                     self.errs:add(node, "cannot declare function: type of " .. node.name.tk .. " is %s", typ)
+                     self.errs:add(node, stringf"cannot declare function: type of " .. replace_percent(node.name.tk) .. stringf" is %s", typ)
                   end
                elseif not self.feat_lax then
                   self.errs:add(node, "functions need an explicit 'local' or 'global' annotation")
@@ -13293,7 +13332,7 @@ do
             end
 
             if not rtype is RecordLikeType then
-               self.errs:add(node, "not a record: %s", rtype)
+               self.errs:add(node, stringf"not a record: %s", rtype)
                return
             end
 
@@ -13698,9 +13737,10 @@ do
                   node.known = facts_or(node, node.e1.known, node.e2.known)
                   local u = unite(node, {ra, rb}, true)
                   if u is UnionType then
-                     ok, err = is_valid_union(u)
-                     if not ok then
-                        u = err and self.errs:invalid_at(node, err, u) or an_invalid(node)
+                     -- err is a different type
+                     local ok2, err2 = is_valid_union(u)
+                     if not ok2 then
+                        u = err2 and self.errs:invalid_at(node, err2, u) or an_invalid(node)
                      end
                   end
                   t = u
@@ -13742,7 +13782,7 @@ do
 
                if ra is EnumType and rb is StringType then
                   if not (rb.literal and ra.enumset[rb.literal]) then
-                     return self.errs:invalid_at(node, "%s is not a member of %s", ub, ua)
+                     return self.errs:invalid_at(node, stringf"%s is not a member of %s", ub, ua)
                   end
                elseif ra is TupleTableType and rb is TupleTableType and #ra.types ~= #rb.types then
                   return self.errs:invalid_at(node, "tuples are not the same size")
@@ -13757,7 +13797,7 @@ do
                elseif self.feat_lax and (is_unknown(ua) or is_unknown(ub)) then
                   return an_unknown(node)
                else
-                  return self.errs:invalid_at(node, "types are not comparable for equality: %s and %s", ua, ub)
+                  return self.errs:invalid_at(node, stringf"types are not comparable for equality: %s and %s", ua, ub)
                end
 
                return a_type(node, "boolean", {})
@@ -13794,7 +13834,7 @@ do
 
                if ra is MapType then
                   if ra.keys.typename == "number" or ra.keys.typename == "integer" then
-                      self.errs:add_warning("hint", node, "using the '#' operator on a map with numeric key type may produce unexpected results")
+                      self.errs:add_warning("hint", node, stringf"using the '#' operator on a map with numeric key type may produce unexpected results")
                   else
                       self.errs:add(node, "using the '#' operator on this map will always return 0")
                   end
@@ -13811,7 +13851,7 @@ do
                end
 
                if not t then
-                  return self.errs:invalid_at(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' on type %s", ua)
+                  return self.errs:invalid_at(node, stringf"cannot use operator '" .. replace_percent(node.op.op) .. stringf"' on type %s", ua)
                end
 
                if not (t is BooleanType or is_unknown(t)) then
@@ -13891,10 +13931,10 @@ do
                   if node.op.op == "or" then
                      local u = unite(node, {ua, ub})
                      if u is UnionType and is_valid_union(u) then
-                        self.errs:add_warning("hint", node, "if a union type was intended, consider declaring it explicitly")
+                        self.errs:add_warning("hint", node, stringf"if a union type was intended, consider declaring it explicitly")
                      end
                   end
-                  return self.errs:invalid_at(node, "cannot use operator '" .. node.op.op:gsub("%%", "%%%%") .. "' for types %s and %s", ua, ub)
+                  return self.errs:invalid_at(node, stringf"cannot use operator '" .. replace_percent(node.op.op) .. stringf"' for types %s and %s", ua, ub)
                end
 
                return t
@@ -14075,8 +14115,8 @@ do
          for fname, ftype in fields_of(resolved, list) do
             if fields[fname] then
                if not self:is_a(fields[fname], ftype) then
-                  local what = list == "meta" and "metamethod" or "field"
-                  self.errs:add(fields[fname], what .." '" .. fname .. "' does not match definition in interface %s", named)
+                  local what = list == "meta" and stringf"metamethod" or stringf"field"
+                  self.errs:add(fields[fname], what .. stringf" '" .. replace_percent(fname) .. stringf"' does not match definition in interface %s", named)
                end
             else
                table.insert(field_order, fname)
@@ -14101,7 +14141,7 @@ do
                      end
                      table.insert(list, iface)
                   else
-                     self.errs:add(iface, "attempted to use %s as interface, but its type is %s", iface, ri)
+                     self.errs:add(iface, stringf"attempted to use %s as interface, but its type is %s", iface, ri)
                   end
                else
                   if not seen[iface] then
@@ -14256,7 +14296,7 @@ do
                         if ri is InterfaceType then
                            typ.interface_list[j] = iface
                         else
-                           self.errs:add(children[i], "%s is not an interface", children[i])
+                           self.errs:add(children[i], stringf"%s is not an interface", children[i])
                         end
                      end
                      i = i + 1
