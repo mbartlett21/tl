@@ -5779,6 +5779,7 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
             end
 
             replaced = replaced:gsub("()\\z(%s*)", function(index_in_disguise: string|integer, ws: string): string
+               -- TODO: remove cast once bootstrap is updated
                local index <const> = index_in_disguise as integer - 1
                if replaced:sub(index, index) == "\\" then
                   return "\\z" .. ws
@@ -5790,6 +5791,7 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
             end)
 
             replaced = replaced:gsub("()\\x(..)", function(index_in_disguise: string|integer, digits: string): string
+               -- TODO: remove cast once bootstrap is updated
                local index <const> = index_in_disguise as integer - 1
                if replaced:sub(index, index) == "\\" then
                   return "\\x" .. digits
@@ -5799,6 +5801,7 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
             end)
 
             replaced = replaced:gsub("()\\u{(.-)}", function(index_in_disguise: string|integer, hex_digits: string): string
+               -- TODO: remove cast once bootstrap is updated
                local index <const> = index_in_disguise as integer - 1
                if replaced:sub(index, index) == "\\" then
                   return "\\u{" .. hex_digits .. "}"

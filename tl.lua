@@ -5779,6 +5779,7 @@ function tl.generate(ast, gen_target, opts)
             end
 
             replaced = replaced:gsub("()\\z(%s*)", function(index_in_disguise, ws)
+
                local index = index_in_disguise - 1
                if replaced:sub(index, index) == "\\" then
                   return "\\z" .. ws
@@ -5790,6 +5791,7 @@ function tl.generate(ast, gen_target, opts)
             end)
 
             replaced = replaced:gsub("()\\x(..)", function(index_in_disguise, digits)
+
                local index = index_in_disguise - 1
                if replaced:sub(index, index) == "\\" then
                   return "\\x" .. digits
@@ -5799,6 +5801,7 @@ function tl.generate(ast, gen_target, opts)
             end)
 
             replaced = replaced:gsub("()\\u{(.-)}", function(index_in_disguise, hex_digits)
+
                local index = index_in_disguise - 1
                if replaced:sub(index, index) == "\\" then
                   return "\\u{" .. hex_digits .. "}"
