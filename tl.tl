@@ -7118,7 +7118,7 @@ end
 local function search_for(module_name: string, suffix: string, path: string, tried: {string}): string, FILE, {string}
    for entry in path:gmatch("[^;]+") do
       local slash_name = module_name:gsub("%.", "/")
-      local filename = entry:gsub("?", slash_name)
+      local filename = entry:gsub("%?", slash_name)
       local tl_filename = filename:gsub("%.lua$", suffix)
       local fd = io.open(tl_filename, "rb")
       if fd then
@@ -7244,7 +7244,7 @@ local function add_compat_entries(program: Node, used_set: {string: boolean}, ge
             load_code("compat", "local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = " .. req("compat53.module") .. "; if p then _tl_compat = m end")
             compat_loaded = true
          end
-         load_code(name, (("local $NAME = _tl_compat and _tl_compat.$NAME or $NAME"):gsub("$NAME", name)))
+         load_code(name, (("local $NAME = _tl_compat and _tl_compat.$NAME or $NAME"):gsub("%$NAME", name)))
       end
    end
    program.y = 1
