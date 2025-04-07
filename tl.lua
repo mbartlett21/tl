@@ -11395,15 +11395,7 @@ a.types[i], b.types[i]), }
       return results
    end
 
-
-
-
-
-
-
-
-
-   local function parse_format_string(pat)
+   local function parse_format_string(node, pat)
       local pos = 1
       local results = {}
       while pos <= #pat do
@@ -11414,15 +11406,23 @@ a.types[i], b.types[i]), }
             return nil, 'missing pattern specifier at end'
          end
          if c:match('[AaEefGg]') then
-            table.insert(results, 'number')
+            table.insert(results, a_type(node, 'number', {}))
          elseif c:match('[cdiouXx]') then
-            table.insert(results, 'integer')
+            table.insert(results, a_type(node, 'integer', {}))
          elseif c == 's' then
-            table.insert(results, 'string')
+            table.insert(results, a_type(node, 'string', {}))
          elseif c == 'q' then
-            table.insert(results, 'string|number|integer|boolean|nil')
+            table.insert(results,
+            a_type(node, "union", { types = {
+               a_type(node, "string", {}),
+               a_type(node, "number", {}),
+               a_type(node, "integer", {}),
+               a_type(node, "boolean", {}),
+               a_type(node, "nil", {}),
+            } }))
+
          elseif c == 'p' then
-            table.insert(results, 'any')
+            table.insert(results, a_type(node, 'any', {}))
          else
             return nil, 'invalid pattern specifier: `' .. c .. '`'
          end
@@ -11538,10 +11538,10 @@ a.types[i], b.types[i]), }
 
          if fstr.typename == "string" and fstr.literal and a.typename == "function" then
             local st = fstr.literal
-            local res, e = parse_format_string(st)
+            local items, e = parse_format_string(node, st)
 
             if e then
-               if res then
+               if items then
 
                   self.errs:add_warning("hint", fstr, e)
                else
@@ -11549,24 +11549,7 @@ a.types[i], b.types[i]), }
                end
             end
 
-            local items = {
-               a_type(node, "string", {}),
-            }
-            for i, v in ipairs(res) do
-               local t
-               if v == 'string|number|integer|boolean|nil' then
-                  t = a_type(node, "union", { types = {
-                     a_type(node, "string", {}),
-                     a_type(node, "number", {}),
-                     a_type(node, "integer", {}),
-                     a_type(node, "boolean", {}),
-                     a_type(node, "nil", {}),
-                  } })
-               else
-                  t = a_type(node, v, {})
-               end
-               items[i + 1] = t
-            end
+            table.insert(items, 1, a_type(node, "string", {}))
 
 
             local cargs = a.args

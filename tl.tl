@@ -11395,17 +11395,9 @@ do
       return results
    end
 
-   local enum FormatResult
-      'string'
-      'integer'
-      'number'
-      'string|number|integer|boolean|nil'
-      'any'
-   end
-
-   local function parse_format_string(pat: string): {FormatResult}, string
+   local function parse_format_string(node: Node, pat: string): {Type}, string
       local pos = 1
-      local results: {FormatResult} = {}
+      local results: {Type} = {}
       while pos <= #pat do
          local endc = pat:match('%%[-+#0-9. ]*()', pos)
          if not endc then return results end
@@ -11414,15 +11406,23 @@ do
             return nil, 'missing pattern specifier at end'
          end
          if c:match'[AaEefGg]' then
-            table.insert(results, 'number')
+            table.insert(results, a_type(node, 'number', {}))
          elseif c:match'[cdiouXx]' then
-            table.insert(results, 'integer')
+            table.insert(results, a_type(node, 'integer', {}))
          elseif c == 's' then
-            table.insert(results, 'string')
+            table.insert(results, a_type(node, 'string', {}))
          elseif c == 'q' then
-            table.insert(results, 'string|number|integer|boolean|nil')
+            table.insert(results,
+               a_union(node, {
+                  a_type(node, "string", {}),
+                  a_type(node, "number", {}),
+                  a_type(node, "integer", {}),
+                  a_type(node, "boolean", {}),
+                  a_type(node, "nil", {}),
+               })
+            )
          elseif c == 'p' then
-            table.insert(results, 'any')
+            table.insert(results, a_type(node, 'any', {}))
          else
             return nil, 'invalid pattern specifier: `' .. c .. '`'
          end
@@ -11538,10 +11538,10 @@ do
 
          if fstr is StringType and fstr.literal and a is FunctionType then
             local st = fstr.literal
-            local res, e = parse_format_string(st)
+            local items, e = parse_format_string(node, st)
 
             if e then
-               if res then
+               if items then
                   -- just a warning
                   self.errs:add_warning("hint", fstr, e)
                else
@@ -11549,24 +11549,7 @@ do
                end
             end
 
-            local items: {Type} = {
-               a_type(node, "string", {}), -- first argument
-            }
-            for i, v in ipairs(res) do
-               local t: Type
-               if v == 'string|number|integer|boolean|nil' then
-                  t = a_union(node, {
-                     a_type(node, "string", {}),
-                     a_type(node, "number", {}),
-                     a_type(node, "integer", {}),
-                     a_type(node, "boolean", {}),
-                     a_type(node, "nil", {}),
-                  })
-               else
-                  t = a_type(node, v as TypeName, {})
-               end
-               items[i + 1] = t
-            end
+            table.insert(items, 1, a_type(node, "string", {}))
 
             -- check the arguments now
             local cargs = a.args
