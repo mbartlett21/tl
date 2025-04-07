@@ -11322,12 +11322,7 @@ a.types[i], b.types[i]), }
       ['*'] = true,
    }
 
-
-
-
-
-
-   local function parse_pattern_string(pat, inclempty)
+   local function parse_pattern_string(node, pat, inclempty)
 
 
 
@@ -11372,10 +11367,10 @@ a.types[i], b.types[i]), }
 
          if c == '(' and peek == ')' then
 
-            table.insert(results, 'integer')
+            table.insert(results, a_type(node, 'integer', {}))
             i = i + 2
          elseif c == '(' then
-            table.insert(results, 'string')
+            table.insert(results, a_type(node, 'string', {}))
             unclosed = unclosed + 1
             i = i + 1
          elseif c == ')' then
@@ -11392,7 +11387,7 @@ a.types[i], b.types[i]), }
       end
 
       if inclempty and not results[1] then
-         results[1] = 'string'
+         results[1] = a_type(node, 'string', {})
       end
       if unclosed ~= 0 then
          return results, unclosed .. ' captures not closed'
@@ -11596,21 +11591,15 @@ a.types[i], b.types[i]), }
 
          if pat.typename == "string" and pat.literal then
             local st = pat.literal
-            local res, e = parse_pattern_string(st, true)
+            local items, e = parse_pattern_string(node, st, true)
 
             if e then
-               if res then
+               if items then
 
                   self.errs:add_warning("hint", pat, e)
                else
                   return self.errs:invalid_at(pat, e)
                end
-            end
-
-            local items = {}
-            for i, v in ipairs(res) do
-               local t = a_type(pat, v, {})
-               items[i] = t
             end
 
 
@@ -11634,10 +11623,10 @@ a.types[i], b.types[i]), }
 
             local st = pat.literal
 
-            local res, e = parse_pattern_string(st, false)
+            local items, e = parse_pattern_string(node, st, false)
 
             if e then
-               if res then
+               if items then
 
                   self.errs:add_warning("hint", pat, e)
                else
@@ -11645,14 +11634,8 @@ a.types[i], b.types[i]), }
                end
             end
 
-            local items = {
-               a_type(pat, "integer", {}),
-               a_type(pat, "integer", {}),
-            }
-            for i, v in ipairs(res) do
-               local t = a_type(pat, v, {})
-               items[i + 2] = t
-            end
+            table.insert(items, 1, a_type(pat, "integer", {}))
+            table.insert(items, 1, a_type(pat, "integer", {}))
 
 
             r = a_type(node, "tuple", { tuple = items })
@@ -11670,21 +11653,15 @@ a.types[i], b.types[i]), }
 
          if pat.typename == "string" and pat.literal then
             local st = pat.literal
-            local res, e = parse_pattern_string(st, true)
+            local items, e = parse_pattern_string(node, st, true)
 
             if e then
-               if res then
+               if items then
 
                   self.errs:add_warning("hint", pat, e)
                else
                   return self.errs:invalid_at(pat, e)
                end
-            end
-
-            local items = {}
-            for i, v in ipairs(res) do
-               local t = a_type(node, v, {})
-               items[i] = t
             end
 
 
@@ -11713,16 +11690,18 @@ a.types[i], b.types[i]), }
 
          if pat.typename == "string" and pat.literal then
             local st = pat.literal
-            local res, e = parse_pattern_string(st, true)
+            local items, e = parse_pattern_string(node, st, true)
 
             if e then
-               if res then
+               if items then
 
                   self.errs:add_warning("hint", pat, e)
                else
                   return self.errs:invalid_at(pat, e)
                end
             end
+
+            local i1 = items[1]
 
 
 
@@ -11741,10 +11720,10 @@ a.types[i], b.types[i]), }
                local vt = trepl.values
 
 
-               self:assert_is_a(trepl, keyt, a_type(pat, res[1], {}))
+               self:assert_is_a(trepl, keyt, i1)
                self:assert_is_a(trepl, vt, expected_pat_return)
             elseif trepl.fields then
-               if res[1] ~= 'string' then
+               if not (i1.typename == "string") then
                   self.errs:invalid_at(trepl, "expected a table with integers as keys")
                end
 
@@ -11752,18 +11731,13 @@ a.types[i], b.types[i]), }
                   self:assert_is_a(trepl, v, expected_pat_return)
                end
             elseif trepl.elements then
-               if res[1] ~= 'integer' then
+               if not (i1.typename == "integer") then
                   self.errs:invalid_at(trepl, "expected a table with strings as keys")
                end
                self:assert_is_a(trepl, trepl.elements, expected_pat_return)
             elseif trepl.typename == "function" then
-               local items = {}
-               for i, v in ipairs(res) do
-                  local t = a_type(pat, v, {})
-                  items[i] = t
-               end
                local validftype = a_function(node, {
-                  min_arity = self.feat_arity and #res or 0,
+                  min_arity = self.feat_arity and #items or 0,
                   args = a_type(node, "tuple", { tuple = items }),
                   rets = a_vararg(node, { expected_pat_return }),
                })

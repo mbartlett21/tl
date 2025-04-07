@@ -11322,12 +11322,7 @@ do
       ['*'] = true,
    }
 
-   local enum PatternResult
-      'string'
-      'integer'
-   end
-
-   local function parse_pattern_string(pat: string, inclempty: boolean): {PatternResult}, string
+   local function parse_pattern_string(node: Node, pat: string, inclempty: boolean): {Type}, string
       --[[
          Pattern syntax:
 
@@ -11351,7 +11346,7 @@ do
       --]]
       local strict = true
 
-      local results: {PatternResult} = {}
+      local results: {Type} = {}
 
       local i = pat:sub(1, 1) == '^' and 2 or 1
       local unclosed = 0
@@ -11372,10 +11367,10 @@ do
 
          if c == '(' and peek == ')' then
             -- position match
-            table.insert(results, 'integer')
+            table.insert(results, a_type(node, 'integer', {}))
             i = i + 2
          elseif c == '(' then
-            table.insert(results, 'string')
+            table.insert(results, a_type(node, 'string', {}))
             unclosed = unclosed + 1
             i = i + 1
          elseif c == ')' then
@@ -11392,7 +11387,7 @@ do
       end
 
       if inclempty and not results[1] then
-         results[1] = 'string'
+         results[1] = a_type(node, 'string', {})
       end
       if unclosed ~= 0 then
          return results, unclosed .. ' captures not closed'
@@ -11596,21 +11591,15 @@ do
 
          if pat is StringType and pat.literal then
             local st = pat.literal
-            local res, e = parse_pattern_string(st, true)
+            local items, e = parse_pattern_string(node, st, true)
 
             if e then
-               if res then
+               if items then
                   -- just a warning
                   self.errs:add_warning("hint", pat, e)
                else
                   return self.errs:invalid_at(pat, e)
                end
-            end
-
-            local items: {Type} = {}
-            for i, v in ipairs(res) do
-               local t = a_type(pat, v as TypeName, {})
-               items[i] = t
             end
 
             -- set the returns to match the response
@@ -11634,10 +11623,10 @@ do
             -- we have a nice constant string that we can modify
             local st = pat.literal
 
-            local res, e = parse_pattern_string(st, false)
+            local items, e = parse_pattern_string(node, st, false)
 
             if e then
-               if res then
+               if items then
                   -- just a warning
                   self.errs:add_warning("hint", pat, e)
                else
@@ -11645,14 +11634,8 @@ do
                end
             end
 
-            local items: {Type} = {
-               a_type(pat, "integer", {}),
-               a_type(pat, "integer", {}),
-            }
-            for i, v in ipairs(res) do
-               local t = a_type(pat, v as TypeName, {})
-               items[i + 2] = t
-            end
+            table.insert(items, 1, a_type(pat, "integer", {}))
+            table.insert(items, 1, a_type(pat, "integer", {}))
 
             -- set the returns to match the response
             r = a_tuple(node, items)
@@ -11670,21 +11653,15 @@ do
 
          if pat is StringType and pat.literal then
             local st = pat.literal
-            local res, e = parse_pattern_string(st, true)
+            local items, e = parse_pattern_string(node, st, true)
 
             if e then
-               if res then
+               if items then
                   -- just a warning
                   self.errs:add_warning("hint", pat, e)
                else
                   return self.errs:invalid_at(pat, e)
                end
-            end
-
-            local items: {Type} = {}
-            for i, v in ipairs(res) do
-               local t = a_type(node, v as TypeName, {})
-               items[i] = t
             end
 
             -- set the returns to match the response
@@ -11713,10 +11690,10 @@ do
 
          if pat is StringType and pat.literal then
             local st = pat.literal
-            local res, e = parse_pattern_string(st, true)
+            local items, e = parse_pattern_string(node, st, true)
 
             if e then
-               if res then
+               if items then
                   -- just a warning
                   self.errs:add_warning("hint", pat, e)
                else
@@ -11724,10 +11701,12 @@ do
                end
             end
 
+            local i1 = items[1]
+
             -- we expect replarg to be one of:
             -- string
-            -- {(res[1]):string}
-            -- function(table.unpack(res)): ((string|integer|number)...)
+            -- {(items[1]):string}
+            -- function(table.unpack(items)): ((string|integer|number)...)
 
             local expected_pat_return = a_union(node, {
                a_type(node, "string", {}),
@@ -11740,11 +11719,11 @@ do
                local keyt = trepl.keys
                local vt = trepl.values
                -- values can be string|number
-               -- keys should match res[1]
-               self:assert_is_a(trepl, keyt, a_type(pat, res[1] as TypeName, {}))
+               -- keys should match items[1]
+               self:assert_is_a(trepl, keyt, i1)
                self:assert_is_a(trepl, vt, expected_pat_return)
             elseif trepl is RecordLikeType then
-               if res[1] ~= 'string' then
+               if not (i1 is StringType) then
                   self.errs:invalid_at(trepl, "expected a table with integers as keys")
                end
                -- check the values
@@ -11752,18 +11731,13 @@ do
                   self:assert_is_a(trepl, v, expected_pat_return)
                end
             elseif trepl is ArrayLikeType then
-               if res[1] ~= 'integer' then
+               if not (i1 is IntegerType) then
                   self.errs:invalid_at(trepl, "expected a table with strings as keys")
                end
                self:assert_is_a(trepl, trepl.elements, expected_pat_return)
             elseif trepl is FunctionType then
-               local items: {Type} = {}
-               for i, v in ipairs(res) do
-                  local t = a_type(pat, v as TypeName, {})
-                  items[i] = t
-               end
                local validftype = a_function(node, {
-                  min_arity = self.feat_arity and #res or 0,
+                  min_arity = self.feat_arity and #items or 0,
                   args = a_tuple(node, items),
                   rets = a_vararg(node, { expected_pat_return }),
                })
