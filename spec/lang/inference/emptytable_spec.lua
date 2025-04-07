@@ -155,7 +155,7 @@ describe("empty table without type annotation", function()
       local function parse_input() : {string: {string: boolean}}
          local m = {}
          for line in io.lines("input.txt") do
-            local c1, c2 = line:match("^(%w+)-(%w+)$")
+            local c1, c2 = line:match("^(%w+)%-(%w+)$")
             if not m[c1] then m[c1] = {} end
             if not m[c2] then m[c2] = {} end
 
