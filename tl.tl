@@ -14040,8 +14040,7 @@ end
 
 local function lang_heuristic(filename?: string, input?: string): ParseLang
    if filename then
-      local pattern = "(.*)%.([a-z]+)$"
-      local _, extension = filename:match(pattern)
+      local _, extension = filename:match("(.*)%.([a-z]+)$")
       extension = extension and extension:lower()
 
       if extension == "tl" then
