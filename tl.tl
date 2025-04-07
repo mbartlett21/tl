@@ -7334,12 +7334,16 @@ local function add_compat_entries(program: Node, used_set: {string: boolean}, ge
          load_code(name, "local _tl_math_mininteger = math.mininteger or -math.pow(2,53) - 1")
       elseif name == "type" then
          load_code(name, "local type = type")
+      elseif name == "_ENV" then
+         load_code(name, "local _ENV = _ENV or _G")
       else
          if not compat_loaded then
             load_code("compat", "local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = " .. req("compat53.module") .. "; if p then _tl_compat = m end")
+            -- load_code("compat", "local _tl_compat={}; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = " .. req("compat53.module") .. "; if p then _tl_compat = m end")
             compat_loaded = true
          end
          load_code(name, (("local $NAME = _tl_compat and _tl_compat.$NAME or $NAME"):gsub("%$NAME", name)))
+         -- load_code(name, (("local $NAME = _tl_compat.$NAME or $NAME"):gsub("%$NAME", name)))
       end
    end
    program.y = 1
@@ -7366,6 +7370,7 @@ local function get_stdlib_compat(): {string:boolean}
       ["pcall"] = true,
       ["xpcall"] = true,
       ["rawlen"] = true,
+      ["_ENV"] = true,
    }
 end
 
@@ -13914,11 +13919,13 @@ do
             end
 
             local t: Type
-            if node.tk == "_G" then
-               t, node.attribute = self:simulate_g()
-            else
-               local use: VarUse = node.is_lvalue and "lvalue" or "use"
-               t, node.attribute = self:find_var_type(node.tk, use)
+            t, node.attribute = self:find_var_type(node.tk, node.is_lvalue and "lvalue" or "use")
+
+            -- locals have priority
+            if not t then
+               if node.tk == "_G" or node.tk == "_ENV" then
+                  t, node.attribute = self:simulate_g()
+               end
             end
             if not t then
                if self.feat_lax then
