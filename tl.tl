@@ -11505,11 +11505,10 @@ do
          end
          local r = self:type_check_function_call(node, a, b, argdelta)
 
-         local pat = node.e2[2 + (argdelta or 0)]
+         local pat = b.tuple[2]
 
-         if pat.kind == "string" then
-            -- we have a nice constant string that we can modify
-            local st = pat.conststr
+         if pat is StringType and pat.literal then
+            local st = pat.literal
             local res, e = parse_pattern_string(st, true)
 
             if e then
@@ -11539,13 +11538,15 @@ do
             return self.errs:invalid_at(node, "string.find requires 2 to 4 arguments")
          end
          local r = self:type_check_function_call(node, a, b, argdelta)
-         local pat = node.e2[2 + (argdelta or 0)]
-         local plainarg = node.e2[4 + (argdelta or 0)]
 
-         if pat.kind == "string"
+         local plainarg = node.e2[4 + (argdelta or 0)]
+         local pat = b.tuple[2]
+
+         if pat is StringType and pat.literal
             and ((not plainarg) or (plainarg.kind == "boolean" and plainarg.tk == "false")) then
             -- we have a nice constant string that we can modify
-            local st = pat.conststr
+            local st = pat.literal
+
             local res, e = parse_pattern_string(st, false)
 
             if e then
@@ -11578,11 +11579,10 @@ do
             return self.errs:invalid_at(node, "string.gmatch requires 2 or 3 arguments")
          end
          local r = self:type_check_function_call(node, a, b, argdelta)
-         local pat = node.e2[2 + (argdelta or 0)]
+         local pat = b.tuple[2]
 
-         if pat.kind == "string" then
-            -- we have a nice constant string that we can modify
-            local st = pat.conststr
+         if pat is StringType and pat.literal then
+            local st = pat.literal
             local res, e = parse_pattern_string(st, true)
 
             if e then
@@ -11620,14 +11620,12 @@ do
          if #b.tuple < 3 or #b.tuple > 4 then
             return self.errs:invalid_at(node, "string.gsub requires 3 or 4 arguments")
          end
-         local pat = node.e2[2 + (argdelta or 0)]
-         -- local replarg = node.e2[3 + (argdelta or 0)]
+         local pat = b.tuple[2]
          local orig_t = b.tuple[3]
          local trepl = self:to_structural(orig_t)
 
-         if pat.kind == "string" then
-            -- we have a nice constant string that we can modify
-            local st = pat.conststr
+         if pat is StringType and pat.literal then
+            local st = pat.literal
             local res, e = parse_pattern_string(st, true)
 
             if e then
