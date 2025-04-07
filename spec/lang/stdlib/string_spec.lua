@@ -126,4 +126,11 @@ describe("string", function()
       ]]))
    end)
 
+
+   describe("pack", function()
+      it("works with types", util.check([[
+         local packed: string = string.pack("<Lfz", 12345, 5.2, "testing")
+         local a, b, c, next: integer, number, string, integer = string.unpack("<Lfz", packed)
+      ]]))
+   end)
 end)
