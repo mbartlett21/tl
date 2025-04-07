@@ -11493,7 +11493,9 @@ a.types[i], b.types[i]), }
       ["assert"] = function(self, node, a, b, argdelta)
          node.known = FACT_TRUTHY
          local r = self:type_check_function_call(node, a, b, argdelta)
-         self:apply_facts(node, node.e2[1].known)
+         if node.e2[1] then
+            self:apply_facts(node, node.e2[1].known)
+         end
          return r
       end,
 
