@@ -11246,11 +11246,6 @@ a.types[i], b.types[i]), }
       return rets
    end
 
-
-
-
-
-
    local function pattern_findclassend(pat, i, strict)
       local c = pat:sub(i, i)
       if c == '%' then
@@ -11320,12 +11315,16 @@ a.types[i], b.types[i]), }
       end
    end
 
-   local isop = {
+   local pattern_isop = {
       ['?'] = true,
       ['+'] = true,
       ['-'] = true,
       ['*'] = true,
    }
+
+
+
+
 
 
    local function parse_pattern_string(pat, inclempty)
@@ -11384,7 +11383,7 @@ a.types[i], b.types[i]), }
             i = i + 1
          elseif strict and c:match('[]^$()*+%-?]') then
             return nil, 'malformed pattern: character was unexpected: `' .. c .. '`'
-         elseif isop[peek] and canhavemul then
+         elseif pattern_isop[peek] and canhavemul then
             i = classend + 2
          else
 
@@ -11397,6 +11396,42 @@ a.types[i], b.types[i]), }
       end
       if unclosed ~= 0 then
          return results, unclosed .. ' captures not closed'
+      end
+      return results
+   end
+
+
+
+
+
+
+
+
+
+   local function parse_format_string(pat)
+      local pos = 1
+      local results = {}
+      while pos <= #pat do
+         local endc = pat:match('%%[-+#0-9. ]*()', pos)
+         if not endc then return results end
+         local c = pat:sub(endc, endc)
+         if c == '' then
+            return nil, 'missing pattern specifier at end'
+         end
+         if c:match('[AaEefGg]') then
+            table.insert(results, 'number')
+         elseif c:match('[cdiouXx]') then
+            table.insert(results, 'integer')
+         elseif c == 's' then
+            table.insert(results, 'string')
+         elseif c == 'q' then
+            table.insert(results, 'string|number|integer|boolean|nil')
+         elseif c == 'p' then
+            table.insert(results, 'any')
+         else
+            return nil, 'invalid pattern specifier: `' .. c .. '`'
+         end
+         pos = endc + 1
       end
       return results
    end
@@ -11497,6 +11532,58 @@ a.types[i], b.types[i]), }
             self:apply_facts(node, node.e2[1].known)
          end
          return r
+      end,
+
+      ["string_format"] = function(self, node, a, b, argdelta)
+         if #b.tuple < 1 then
+            return self.errs:invalid_at(node, "string.format requires at least one argument")
+         end
+
+         local fstr = b.tuple[1]
+
+         if fstr.typename == "string" and fstr.literal and a.typename == "function" then
+            local st = fstr.literal
+            local res, e = parse_format_string(st)
+
+            if e then
+               if res then
+
+                  self.errs:add_warning("hint", fstr, e)
+               else
+                  return self.errs:invalid_at(fstr, e)
+               end
+            end
+
+            local items = {
+               a_type(node, "string", {}),
+            }
+            for i, v in ipairs(res) do
+               local t
+               if v == 'string|number|integer|boolean|nil' then
+                  t = a_type(node, "union", { types = {
+                     a_type(node, "string", {}),
+                     a_type(node, "number", {}),
+                     a_type(node, "integer", {}),
+                     a_type(node, "boolean", {}),
+                     a_type(node, "nil", {}),
+                  } })
+               else
+                  t = a_type(node, v, {})
+               end
+               items[i + 1] = t
+            end
+
+
+            local cargs = a.args
+            a.args = a_type(node, "tuple", { tuple = items })
+
+            local res2 = self:type_check_function_call(node, a, b, argdelta)
+
+            a.args = cargs
+            return res2
+         else
+            return (self:type_check_function_call(node, a, b, argdelta))
+         end
       end,
 
       ["string_match"] = function(self, node, a, b, argdelta)

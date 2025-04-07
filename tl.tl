@@ -11246,11 +11246,6 @@ do
       return rets
    end
 
-   local enum PatternResult
-      'string'
-      'integer'
-   end
-
    local function pattern_findclassend(pat: string, i: integer, strict: boolean): integer, boolean, string
       local c = pat:sub(i, i)
       if c == '%' then
@@ -11320,13 +11315,17 @@ do
       end
    end
 
-   local isop: {string:boolean} = {
+   local pattern_isop: {string:boolean} = {
       ['?'] = true,
       ['+'] = true,
       ['-'] = true,
       ['*'] = true,
    }
 
+   local enum PatternResult
+      'string'
+      'integer'
+   end
 
    local function parse_pattern_string(pat: string, inclempty: boolean): {PatternResult}, string
       --[[
@@ -11384,7 +11383,7 @@ do
             i = i + 1
          elseif strict and c:match'[]^$()*+%-?]' then -- operations that haven't been handled
             return nil, 'malformed pattern: character was unexpected: `' .. c .. '`'
-         elseif isop[peek] and canhavemul then
+         elseif pattern_isop[peek] and canhavemul then
             i = classend + 2
          else
             -- simple match
@@ -11397,6 +11396,42 @@ do
       end
       if unclosed ~= 0 then
          return results, unclosed .. ' captures not closed'
+      end
+      return results
+   end
+
+   local enum FormatResult
+      'string'
+      'integer'
+      'number'
+      'string|number|integer|boolean|nil'
+      'any'
+   end
+
+   local function parse_format_string(pat: string): {FormatResult}, string
+      local pos = 1
+      local results: {FormatResult} = {}
+      while pos <= #pat do
+         local endc = pat:match('%%[-+#0-9. ]*()', pos)
+         if not endc then return results end
+         local c = pat:sub(endc, endc)
+         if c == '' then
+            return nil, 'missing pattern specifier at end'
+         end
+         if c:match'[AaEefGg]' then
+            table.insert(results, 'number')
+         elseif c:match'[cdiouXx]' then
+            table.insert(results, 'integer')
+         elseif c == 's' then
+            table.insert(results, 'string')
+         elseif c == 'q' then
+            table.insert(results, 'string|number|integer|boolean|nil')
+         elseif c == 'p' then
+            table.insert(results, 'any')
+         else
+            return nil, 'invalid pattern specifier: `' .. c .. '`'
+         end
+         pos = endc + 1
       end
       return results
    end
@@ -11497,6 +11532,58 @@ do
             self:apply_facts(node, node.e2[1].known)
          end
          return r
+      end,
+
+      ["string_format"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
+         if #b.tuple < 1 then
+            return self.errs:invalid_at(node, "string.format requires at least one argument")
+         end
+
+         local fstr = b.tuple[1]
+
+         if fstr is StringType and fstr.literal and a is FunctionType then
+            local st = fstr.literal
+            local res, e = parse_format_string(st)
+
+            if e then
+               if res then
+                  -- just a warning
+                  self.errs:add_warning("hint", fstr, e)
+               else
+                  return self.errs:invalid_at(fstr, e)
+               end
+            end
+
+            local items: {Type} = {
+               a_type(node, "string", {}), -- first argument
+            }
+            for i, v in ipairs(res) do
+               local t: Type
+               if v == 'string|number|integer|boolean|nil' then
+                  t = a_union(node, {
+                     a_type(node, "string", {}),
+                     a_type(node, "number", {}),
+                     a_type(node, "integer", {}),
+                     a_type(node, "boolean", {}),
+                     a_type(node, "nil", {}),
+                  })
+               else
+                  t = a_type(node, v as TypeName, {})
+               end
+               items[i + 1] = t
+            end
+
+            -- check the arguments now
+            local cargs = a.args
+            a.args = a_tuple(node, items)
+
+            local res2 = self:type_check_function_call(node, a, b, argdelta)
+
+            a.args = cargs
+            return res2
+         else
+            return (self:type_check_function_call(node, a, b, argdelta))
+         end
       end,
 
       ["string_match"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
