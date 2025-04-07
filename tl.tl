@@ -11571,6 +11571,46 @@ do
          return r
       end,
 
+      ["string_gmatch"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
+         if #b.tuple < 2 or #b.tuple > 3 then
+            return self.errs:invalid_at(node, "string.gmatch requires 2 or 3 arguments")
+         end
+         local r = self:type_check_function_call(node, a, b, argdelta)
+         local pat = node.e2[2 + (argdelta or 0)]
+
+         if pat.kind == "string" then
+            -- we have a nice constant string that we can modify
+            local st = pat.conststr
+            local res, e = parse_pattern_string(st, true)
+
+            if e then
+               if res then
+                  -- just a warning
+                  self.errs:add_warning("hint", pat, e)
+               else
+                  return self.errs:invalid_at(pat, e)
+               end
+            end
+
+            local items: {Type} = {}
+            for i, v in ipairs(res) do
+               local t = a_type(node, v as TypeName, {})
+               items[i] = t
+            end
+
+            -- set the returns to match the response
+            r = a_tuple(node, {
+               a_function(node, {
+                  min_arity = 0,
+                  args = a_tuple(node, {}),
+                  rets = a_tuple(node, items),
+               })
+            })
+         end
+
+         return r
+      end,
+
       ["string_gsub"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
          -- if the second argument is a literal, we can parse it and change the matchers
          -- gsub: function(string, string, <matcher>, ? integer): string, integer

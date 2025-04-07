@@ -11571,6 +11571,46 @@ a.types[i], b.types[i]), }
          return r
       end,
 
+      ["string_gmatch"] = function(self, node, a, b, argdelta)
+         if #b.tuple < 2 or #b.tuple > 3 then
+            return self.errs:invalid_at(node, "string.gmatch requires 2 or 3 arguments")
+         end
+         local r = self:type_check_function_call(node, a, b, argdelta)
+         local pat = node.e2[2 + (argdelta or 0)]
+
+         if pat.kind == "string" then
+
+            local st = pat.conststr
+            local res, e = parse_pattern_string(st, true)
+
+            if e then
+               if res then
+
+                  self.errs:add_warning("hint", pat, e)
+               else
+                  return self.errs:invalid_at(pat, e)
+               end
+            end
+
+            local items = {}
+            for i, v in ipairs(res) do
+               local t = a_type(node, v, {})
+               items[i] = t
+            end
+
+
+            r = a_type(node, "tuple", { tuple = {
+               a_function(node, {
+                  min_arity = 0,
+                  args = a_type(node, "tuple", { tuple = {} }),
+                  rets = a_type(node, "tuple", { tuple = items }),
+               }),
+            } })
+         end
+
+         return r
+      end,
+
       ["string_gsub"] = function(self, node, a, b, argdelta)
 
 
