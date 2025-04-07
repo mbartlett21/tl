@@ -316,8 +316,9 @@ do
       gmatch: function(string, string, ? integer): (function(): string...)
 
       gsub: function(string, string, string, ? integer): string, integer
-      gsub: function(string, string, {string:string}, ? integer): string, integer
-      gsub: function(string, string, function(string...): ((string | integer | number)...), ? integer): string, integer
+      gsub: function(string, string, {string:string|integer|number}, ? integer): string, integer
+      gsub: function(string, string, {integer:string|integer|number}, ? integer): string, integer
+      gsub: function(string, string, function((string|integer)...): ((string|integer|number)...), ? integer): string, integer
 
       len: function(string): integer
       lower: function(string): string
@@ -5777,7 +5778,7 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
                out.h = out.h + 1
             end
 
-            replaced = replaced:gsub("()\\z(%s*)", function(index_in_disguise: string, ws: string): string
+            replaced = replaced:gsub("()\\z(%s*)", function(index_in_disguise: string|integer, ws: string): string
                local index <const> = index_in_disguise as integer - 1
                if replaced:sub(index, index) == "\\" then
                   return "\\z" .. ws
@@ -5788,7 +5789,7 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
                return ""
             end)
 
-            replaced = replaced:gsub("()\\x(..)", function(index_in_disguise: string, digits: string): string
+            replaced = replaced:gsub("()\\x(..)", function(index_in_disguise: string|integer, digits: string): string
                local index <const> = index_in_disguise as integer - 1
                if replaced:sub(index, index) == "\\" then
                   return "\\x" .. digits
@@ -5797,7 +5798,7 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
                return byte and string.format("\\%03d", byte) or "\\x" .. digits
             end)
 
-            replaced = replaced:gsub("()\\u{(.-)}", function(index_in_disguise: string, hex_digits: string): string
+            replaced = replaced:gsub("()\\u{(.-)}", function(index_in_disguise: string|integer, hex_digits: string): string
                local index <const> = index_in_disguise as integer - 1
                if replaced:sub(index, index) == "\\" then
                   return "\\u{" .. hex_digits .. "}"
@@ -11567,6 +11568,86 @@ do
             r = a_tuple(node, items)
          end
 
+         return r
+      end,
+
+      ["string_gsub"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
+         -- if the second argument is a literal, we can parse it and change the matchers
+         -- gsub: function(string, string, <matcher>, ? integer): string, integer
+
+         if #b.tuple < 3 or #b.tuple > 4 then
+            return self.errs:invalid_at(node, "string.gsub requires 3 or 4 arguments")
+         end
+         local pat = node.e2[2 + (argdelta or 0)]
+         -- local replarg = node.e2[3 + (argdelta or 0)]
+         local orig_t = b.tuple[3]
+         local trepl = self:to_structural(orig_t)
+
+         if pat.kind == "string" then
+            -- we have a nice constant string that we can modify
+            local st = pat.conststr
+            local res, e = parse_pattern_string(st, true)
+
+            if e then
+               if res then
+                  -- just a warning
+                  self.errs:add_warning("hint", pat, e)
+               else
+                  return self.errs:invalid_at(pat, e)
+               end
+            end
+
+            -- we expect replarg to be one of:
+            -- string
+            -- {(res[1]):string}
+            -- function(table.unpack(res)): ((string|integer|number)...)
+
+            local expected_pat_return = a_union(node, {
+               a_type(node, "string", {}),
+               a_type(node, "integer", {}),
+               a_type(node, "number", {}),
+            })
+            if self:is_a(trepl, expected_pat_return) then
+               -- fine
+            elseif trepl is MapType then
+               local keyt = trepl.keys
+               local vt = trepl.values
+               -- values can be string|number
+               -- keys should match res[1]
+               self:assert_is_a(trepl, keyt, a_type(pat, res[1] as TypeName, {}))
+               self:assert_is_a(trepl, vt, expected_pat_return)
+            elseif trepl is RecordLikeType then
+               if res[1] ~= 'string' then
+                  self.errs:invalid_at(trepl, "expected a table with integers as keys")
+               end
+               -- check the values
+               for _, v in fields_of(trepl) do
+                  self:assert_is_a(trepl, v, expected_pat_return)
+               end
+            elseif trepl is ArrayLikeType then
+               if res[1] ~= 'integer' then
+                  self.errs:invalid_at(trepl, "expected a table with strings as keys")
+               end
+               self:assert_is_a(trepl, trepl.elements, expected_pat_return)
+            elseif trepl is FunctionType then
+               local items: {Type} = {}
+               for i, v in ipairs(res) do
+                  local t = a_type(pat, v as TypeName, {})
+                  items[i] = t
+               end
+               local validftype = a_function(node, {
+                  min_arity = self.feat_arity and #res or 0,
+                  args = a_tuple(node, items),
+                  rets = a_vararg(node, { expected_pat_return }),
+               })
+               self:arg_check(trepl, nil, trepl, validftype, "contravariant", "argument")
+            end
+            -- other types should be taken care of by the type_check_function_call below
+            -- else
+            --    self.errs:add_prefixing(trepl, { Err_at(trepl, "expected string, map or function") }, "")
+         end
+
+         local r = self:type_check_function_call(node, a, b, argdelta)
          return r
       end,
    }

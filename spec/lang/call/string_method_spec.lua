@@ -29,7 +29,7 @@ describe("string method call", function()
          local s = "a"
          s = s:gsub(function() end) .. "!"
       ]], {
-         { msg = "wrong number of arguments" },
+         { msg = "string.gsub requires 3 or 4 arguments" },
       }))
    end)
    describe("chained", function()

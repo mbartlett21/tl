@@ -316,8 +316,9 @@ do
       gmatch: function(string, string, ? integer): (function(): string...)
 
       gsub: function(string, string, string, ? integer): string, integer
-      gsub: function(string, string, {string:string}, ? integer): string, integer
-      gsub: function(string, string, function(string...): ((string | integer | number)...), ? integer): string, integer
+      gsub: function(string, string, {string:string|integer|number}, ? integer): string, integer
+      gsub: function(string, string, {integer:string|integer|number}, ? integer): string, integer
+      gsub: function(string, string, function((string|integer)...): ((string|integer|number)...), ? integer): string, integer
 
       len: function(string): integer
       lower: function(string): string
@@ -11567,6 +11568,86 @@ a.types[i], b.types[i]), }
             r = a_type(node, "tuple", { tuple = items })
          end
 
+         return r
+      end,
+
+      ["string_gsub"] = function(self, node, a, b, argdelta)
+
+
+
+         if #b.tuple < 3 or #b.tuple > 4 then
+            return self.errs:invalid_at(node, "string.gsub requires 3 or 4 arguments")
+         end
+         local pat = node.e2[2 + (argdelta or 0)]
+
+         local orig_t = b.tuple[3]
+         local trepl = self:to_structural(orig_t)
+
+         if pat.kind == "string" then
+
+            local st = pat.conststr
+            local res, e = parse_pattern_string(st, true)
+
+            if e then
+               if res then
+
+                  self.errs:add_warning("hint", pat, e)
+               else
+                  return self.errs:invalid_at(pat, e)
+               end
+            end
+
+
+
+
+
+
+            local expected_pat_return = a_type(node, "union", { types = {
+               a_type(node, "string", {}),
+               a_type(node, "integer", {}),
+               a_type(node, "number", {}),
+            } })
+            if self:is_a(trepl, expected_pat_return) then
+
+            elseif trepl.typename == "map" then
+               local keyt = trepl.keys
+               local vt = trepl.values
+
+
+               self:assert_is_a(trepl, keyt, a_type(pat, res[1], {}))
+               self:assert_is_a(trepl, vt, expected_pat_return)
+            elseif trepl.fields then
+               if res[1] ~= 'string' then
+                  self.errs:invalid_at(trepl, "expected a table with integers as keys")
+               end
+
+               for _, v in fields_of(trepl) do
+                  self:assert_is_a(trepl, v, expected_pat_return)
+               end
+            elseif trepl.elements then
+               if res[1] ~= 'integer' then
+                  self.errs:invalid_at(trepl, "expected a table with strings as keys")
+               end
+               self:assert_is_a(trepl, trepl.elements, expected_pat_return)
+            elseif trepl.typename == "function" then
+               local items = {}
+               for i, v in ipairs(res) do
+                  local t = a_type(pat, v, {})
+                  items[i] = t
+               end
+               local validftype = a_function(node, {
+                  min_arity = self.feat_arity and #res or 0,
+                  args = a_type(node, "tuple", { tuple = items }),
+                  rets = a_vararg(node, { expected_pat_return }),
+               })
+               self:arg_check(trepl, nil, trepl, validftype, "contravariant", "argument")
+            end
+
+
+
+         end
+
+         local r = self:type_check_function_call(node, a, b, argdelta)
          return r
       end,
    }
