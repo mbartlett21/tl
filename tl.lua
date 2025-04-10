@@ -22,7 +22,7 @@ do
          "k" "v" "kv"
       end
 
-      __call: function(T, any...): any...
+      __call: any --[[FIXME: function(T, <bivariant> any...): <bivariant> any...]]
       __mode: Mode
       __name: string
       __tostring: function(T): string
@@ -519,6 +519,7 @@ local Errors = {}
 
 
 local tl = { GenerateOptions = {}, CheckOptions = {}, Env = {}, Result = {}, Error = {}, TypeInfo = {}, TypeReport = {}, EnvOptions = {}, Token = {}, TypeCheckOptions = {} }
+
 
 
 
@@ -7246,6 +7247,7 @@ local function require_module(w, module_name, opts, env)
       local defaults = {
          feat_lax = opts.feat_lax or save_defaults.feat_lax,
          feat_arity = opts.feat_arity or save_defaults.feat_arity,
+         feat_strict_fns = opts.feat_strict_fns or save_defaults.feat_strict_fns,
          gen_compat = opts.gen_compat or save_defaults.gen_compat,
          gen_target = opts.gen_target or save_defaults.gen_target,
          run_internal_compiler_checks = opts.run_internal_compiler_checks or save_defaults.run_internal_compiler_checks,
@@ -7530,6 +7532,7 @@ do
 
 
    local TypeChecker = {}
+
 
 
 
@@ -9603,7 +9606,7 @@ a.types[i], b.types[i]), }
                   local ai = aa[i]
                   local bi = ba[i] or (b.args.is_va and ba[#ba])
                   if bi then
-                     self:arg_check(nil, errs, ai, bi, "bivariant", "argument", i)
+                     self:arg_check(nil, errs, ai, bi, self.feat_strict_fns and "contravariant" or "bivariant", "argument", i)
                   end
                end
             end
@@ -9618,7 +9621,7 @@ a.types[i], b.types[i]), }
                   nrets = nrets - 1
                end
                for i = 1, nrets do
-                  self:arg_check(nil, errs, ar[i], br[i], "bivariant", "return", i)
+                  self:arg_check(nil, errs, ar[i], br[i], self.feat_strict_fns and "covariant" or "bivariant", "return", i)
                end
             end
 
@@ -14598,6 +14601,7 @@ self:expand_type(node, values, elements) })
 
       self.feat_lax = set_feat(opts.feat_lax or env.defaults.feat_lax, false)
       self.feat_arity = set_feat(opts.feat_arity or env.defaults.feat_arity, true)
+      self.feat_strict_fns = set_feat(opts.feat_strict_fns or env.defaults.feat_strict_fns, false)
       self.gen_compat = opts.gen_compat or env.defaults.gen_compat or DEFAULT_GEN_COMPAT
       self.gen_target = opts.gen_target or env.defaults.gen_target or DEFAULT_GEN_TARGET
 
