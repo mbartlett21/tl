@@ -11642,7 +11642,7 @@ do
    local special_functions <total>: {SpecialFunctionName : function(TypeChecker, Node, Type, TupleType, ? integer):InvalidOrTupleType } = {
       ["pairs"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
          if not b.tuple[1] then
-            return self.errs:invalid_at(node, "pairs requires an argument")
+            return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects at least 1)")
          end
          local t = self:to_structural(b.tuple[1])
          if t is ArrayLikeType then
@@ -11667,7 +11667,7 @@ do
 
       ["ipairs"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
          if not b.tuple[1] then
-            return self.errs:invalid_at(node, "ipairs requires an argument")
+            return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects at least 1)")
          end
          local orig_t = b.tuple[1]
          local t = self:to_structural(orig_t)
@@ -11691,13 +11691,13 @@ do
          if #b.tuple == 2 then
             return a_tuple(node, { self:type_check_index(node.e2[1], node.e2[2], b.tuple[1], b.tuple[2]) })
          else
-            return self.errs:invalid_at(node, "rawget expects two arguments")
+            return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects 2)")
          end
       end,
 
       ["require"] = function(self: TypeChecker, node: Node, _a: Type, b: TupleType, _argdelta?: integer): InvalidOrTupleType
          if #b.tuple ~= 1 then
-            return self.errs:invalid_at(node, "require expects one literal argument")
+            return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects 1)")
          end
          if node.e2[1].kind ~= "string" then
             return a_tuple(node, { a_type(node, "any", {}) })
