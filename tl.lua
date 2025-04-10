@@ -225,7 +225,7 @@ do
          "k" "v" "kv"
       end
 
-      __call: function(T, any...): any...
+      __call: any --[[FIXME: getmetatable(T).__call --function(T, any...): any...]]
       __mode: Mode
       __name: string
       __tostring: function(T): string
@@ -9196,6 +9196,7 @@ do
       },
    }
 
+
    TypeChecker.subtype_relations = {
       ["nil"] = {
          ["*"] = compare_true,
@@ -9468,8 +9469,7 @@ a.types[i], b.types[i]), }
                   local ai = aa[i]
                   local bi = ba[i] or (b.args.is_va and ba[#ba])
                   if bi then
-
-                     self:arg_check(nil, errs, ai, bi, "bivariant", "argument", i)
+                     self:arg_check(nil, errs, ai, bi, "contravariant", "argument", i)
                   end
                end
             end
@@ -9537,6 +9537,7 @@ a.types[i], b.types[i]), }
 
             local bb = self:apply_generic(b, b)
             local ok, errs = self:is_a(a, bb)
+            if errs and errs[1] then errs[1].msg = errs[1].msg .. '!!!!!' end
 
             return ok, errs
          end,
@@ -14437,8 +14438,9 @@ self:expand_type(node, values, elements) })
       end
    end
 
-   tl.check = function(ast, filename, opts, env)
+   tl.check = function(ast_, filename, opts, env)
       filename = filename or "?"
+      local ast = ast_
 
       opts = opts or {}
 
