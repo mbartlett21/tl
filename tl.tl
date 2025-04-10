@@ -9202,8 +9202,8 @@ do
       },
       ["tuple"] = {
          ["tuple"] = function(self: TypeChecker, a: TupleType, b: TupleType): boolean, {Error}  -- ∀ a[i] ∈ a, b[i] ∈ b. a[i] <: b[i]
-            local at, bt = a.tuple, b.tuple                                  -- ──────────────────────────────────
-            if #at ~= #bt then                                               --        a tuple <: b tuple
+            local at, bt = a.tuple, b.tuple                                                     -- ──────────────────────────────────
+            if #at ~= #bt then                                                                  --        a tuple <: b tuple
                return false
             end
             for i = 1, #at do
@@ -9240,8 +9240,8 @@ do
             return self:forall_are_subtype_of(a, b)
          end,
          ["union"] = function(self: TypeChecker, a: UnionType, b: UnionType): boolean, {Error} -- ∀ t ∈ a. ∃ u ∈ b. t <: u
-            local used = {}                                                 -- ────────────────────────
-            for _, t in ipairs(a.types) do                                  --    a union <: b union
+            local used = {}                                                                    -- ────────────────────────
+            for _, t in ipairs(a.types) do                                                     --    a union <: b union
                self:begin_scope()
                local u = self:exists_supertype_in(t, b)
                self:end_scope() -- don't preserve failed inferences
