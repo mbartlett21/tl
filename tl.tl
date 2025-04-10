@@ -2404,9 +2404,9 @@ local parse_expression_and_tk: function(ps: ParseState, i: integer, tk: string):
 local parse_statements: function(ParseState, integer, ? boolean): integer, Node
 local parse_argument_list: function(ParseState, integer): integer, Node, integer
 local parse_argument_type_list: function(ParseState, integer): integer, TupleType, boolean, integer
-local parse_type: function(ParseState, integer): integer, FirstOrderType, integer
+local parse_type: function(ParseState, integer): integer, FirstClassType, integer
 local parse_type_declaration: function(ps: ParseState, i: integer, node_name: NodeKind): integer, Node
-local parse_interface_name: function(ps: ParseState, i: integer): integer, Type, integer
+local parse_interface_name: function(ps: ParseState, i: integer): integer, NominalType, integer
 
 local type ParseBody = function(ps: ParseState, i: integer, def: Type): integer, boolean
 local parse_enum_body: function(ps: ParseState, i: integer, def: EnumType): integer, boolean
@@ -3494,7 +3494,7 @@ local function parse_argument_type(ps: ParseState, i: integer): integer, Argumen
    return i, { i = i, type = typ, is_va = is_va, is_self = is_self, opt = opt or is_va }, 0
 end
 
-parse_argument_type_list = function(ps: ParseState, i: integer): integer, Type, boolean, integer
+parse_argument_type_list = function(ps: ParseState, i: integer): integer, TupleType, boolean, integer
    local ars: {ArgumentInfo} = {}
    i = parse_bracket_list(ps, i, ars, "(", ")", "sep", parse_argument_type)
    local t, list = new_tuple(ps, i)
@@ -3904,7 +3904,7 @@ local function parse_where_clause(ps: ParseState, i: integer, def: RecordLikeTyp
    return i, node
 end
 
-parse_interface_name = function(ps: ParseState, i: integer): integer, FirstOrderType, integer
+parse_interface_name = function(ps: ParseState, i: integer): integer, NominalType, integer
    local istart = i
    local typ: FirstOrderType
    i, typ = parse_simple_type_or_nominal(ps, i)
@@ -3914,14 +3914,14 @@ parse_interface_name = function(ps: ParseState, i: integer): integer, FirstOrder
    return i, typ
 end
 
-local function parse_array_interface_type(ps: ParseState, i: integer, def: RecordLikeType): integer, Type
+local function parse_array_interface_type(ps: ParseState, i: integer, def: RecordLikeType): integer, ArrayType
    if def.interface_list then
       local first = def.interface_list[1]
       if first is ArrayType then
          return failskip(ps, i, "duplicated declaration of array element type", parse_type as SkipFunction)
       end
    end
-   local t: Type
+   local t: FirstClassType
    i, t = parse_base_type(ps, i)
    if not t then
       return i
@@ -7410,7 +7410,6 @@ end
 do
    local type TypeRelations = {TypeName:{TypeName:CompareTypes}}
    local type InvalidOrTupleType = InvalidType | TupleType
-
    local record TypeChecker
       env: Env
       st: {Scope}
@@ -7765,7 +7764,7 @@ do
       ["unknown"] = true,
    }
 
-   local resolve_typevars: function(self: TypeChecker, t: Type): FirstClassType, {Error}
+   local resolve_typevars: function(self: TypeChecker, t: Type): Type, {Error}
    do
       local record ResolveTypeVarState
          tc: TypeChecker
@@ -7786,7 +7785,7 @@ do
          end,
       }
 
-      local function clear_resolved_typeargs(copy: GenericType, resolved: {string:Type}): Type
+      local function clear_resolved_typeargs(copy: GenericType, resolved: {string:Type}): FirstClassType
          for i = #copy.typeargs, 1, -1 do
             local r = resolved[copy.typeargs[i].typearg]
             if r then
@@ -8412,7 +8411,8 @@ do
       if applied is GenericType then
          return applied.t, g.typeargs
       else
-         return applied, g.typeargs
+         -- FIXME: verify this is correct. Perhaps resolve_typevars could do with better types
+         return applied as FirstOrderType, g.typeargs
       end
    end
 
@@ -9468,6 +9468,7 @@ do
                   local ai = aa[i]
                   local bi = ba[i] or (b.args.is_va and ba[#ba])
                   if bi then
+                     -- TODO: change this to contravariant
                      self:arg_check(nil, errs, ai, bi, "bivariant", "argument", i)
                   end
                end
@@ -9483,7 +9484,7 @@ do
                   nrets = nrets - 1
                end
                for i = 1, nrets do
-                  self:arg_check(nil, errs, ar[i], br[i], "bivariant", "return", i)
+                  self:arg_check(nil, errs, ar[i], br[i], "covariant", "return", i)
                end
             end
 
@@ -11208,7 +11209,7 @@ do
       end
    end
 
-   local function special_pcall_xpcall(self: TypeChecker, node: Node, _a: Type, b: TupleType, argdelta?: integer): Type
+   local function special_pcall_xpcall(self: TypeChecker, node: Node, _a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
       local base_nargs = (node.e1.tk == "xpcall") and 2 or 1
       local bool = a_type(node, "boolean", {})
       if #node.e2 < base_nargs then
