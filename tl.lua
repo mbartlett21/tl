@@ -7528,7 +7528,6 @@ end
 do
 
 
-
    local TypeChecker = {}
 
 
@@ -8542,6 +8541,7 @@ do
       if applied.typename == "generic" then
          return applied.t, g.typeargs
       else
+
          return applied, g.typeargs
       end
    end
@@ -9603,6 +9603,7 @@ a.types[i], b.types[i]), }
                   local ai = aa[i]
                   local bi = ba[i] or (b.args.is_va and ba[#ba])
                   if bi then
+
                      self:arg_check(nil, errs, ai, bi, "bivariant", "argument", i)
                   end
                end
@@ -9618,7 +9619,7 @@ a.types[i], b.types[i]), }
                   nrets = nrets - 1
                end
                for i = 1, nrets do
-                  self:arg_check(nil, errs, ar[i], br[i], "bivariant", "return", i)
+                  self:arg_check(nil, errs, ar[i], br[i], "covariant", "return", i)
                end
             end
 
