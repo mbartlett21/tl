@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local debug = _tl_compat and _tl_compat.debug or debug; local io = _tl_compat and _tl_compat.io or io; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local load = _tl_compat and _tl_compat.load or load; local math = _tl_compat and _tl_compat.math or math; local _tl_math_maxinteger = math.maxinteger or math.pow(2, 53); local os = _tl_compat and _tl_compat.os or os; local package = _tl_compat and _tl_compat.package or package; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local type = type; local utf8 = _tl_compat and _tl_compat.utf8 or utf8
+local _tl_compat = {}; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat.assert or assert; local debug = _tl_compat.debug or debug; local io = _tl_compat.io or io; local ipairs = _tl_compat.ipairs or ipairs; local load = _tl_compat.load or load; local math = _tl_compat.math or math; local _tl_math_maxinteger = math.maxinteger or math.pow(2, 53); local os = _tl_compat.os or os; local package = _tl_compat.package or package; local pairs = _tl_compat.pairs or pairs; local string = _tl_compat.string or string; local table = _tl_compat.table or table; local type = type; local utf8 = _tl_compat.utf8 or utf8
 local VERSION = "0.24.4+dev"
 
 local stdlib = [=====[
@@ -4606,6 +4606,35 @@ do
 
    function tl.parse_program(tokens, errs, filename, parse_lang)
       errs = errs or {}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
       local ps = {
          tokens = tokens,
          errs = errs,
@@ -7287,6 +7316,62 @@ end
 
 local compat_code_cache = {}
 
+local function assert_no_compat_errors(errors, name)
+   if #errors ~= 0 then
+      local out = {}
+      for _, err in ipairs(errors) do
+         print(("%p"):format(err))
+         table.insert(out, err.y .. ":" .. err.x .. " " .. err.msg .. "\n")
+      end
+      error("Internal Compiler Error: compatibility library contains " .. name .. ":\n" .. table.concat(out), 2)
+   end
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 local function add_compat_entries(program, used_set, gen_compat)
    if gen_compat == "off" or not next(used_set) then
       return
@@ -7303,7 +7388,9 @@ local function add_compat_entries(program, used_set, gen_compat)
    local function load_code(name, text)
       local code = compat_code_cache[name]
       if not code then
-         code = tl.parse(text, "@internal", "lua")
+         local syntax_errors
+         code, syntax_errors = tl.parse(text, "@internal", "lua")
+         assert_no_compat_errors(syntax_errors, "syntax errors: " .. text)
          tl.check(code, "@internal", { feat_lax = "off", gen_compat = "off" })
          compat_code_cache[name] = code
       end
@@ -7313,10 +7400,12 @@ local function add_compat_entries(program, used_set, gen_compat)
       end
    end
 
-   local function req(m)
-      return (gen_compat == "optional") and
-      "pcall(require, '" .. m .. "')" or
-      "true, require('" .. m .. "')"
+   local function req(m, save_in)
+      if gen_compat == "optional" then
+         return " local p, m = pcall(require, '" .. m .. "') if p then " .. save_in .. " = m end "
+      else
+         return " " .. save_in .. " = require('" .. m .. "') "
+      end
    end
 
    for _, name in ipairs(used_list) do
@@ -7325,9 +7414,9 @@ local function add_compat_entries(program, used_set, gen_compat)
       elseif name == "table.pack" then
          load_code(name, [[local _tl_table_pack = table.pack or function(...) return { n = select("#", ...), ... } end]])
       elseif name == "bit32" then
-         load_code(name, "local bit32 = bit32; if not bit32 then local p, m = " .. req("bit32") .. "; if p then bit32 = m end")
+         load_code(name, "local bit32 = bit32; if not bit32 then" .. req("bit32", "bit32") .. "end")
       elseif name == "mt" then
-         load_code(name, "local _tl_mt = function(m, s, a, b) return (getmetatable(s == 1 and a or b)[m](a, b) end")
+         load_code(name, "local _tl_mt = function(m, s, a, b) return (getmetatable(s == 1 and a or b)[m](a, b)) end")
       elseif name == "math.maxinteger" then
          load_code(name, "local _tl_math_maxinteger = math.maxinteger or math.pow(2,53)")
       elseif name == "math.mininteger" then
@@ -7338,12 +7427,11 @@ local function add_compat_entries(program, used_set, gen_compat)
          load_code(name, "local _ENV = _ENV or _G")
       else
          if not compat_loaded then
-            load_code("compat", "local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = " .. req("compat53.module") .. "; if p then _tl_compat = m end")
-
+            load_code("compat", "local _tl_compat = {}; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then" ..
+            req("compat53.module", "_tl_compat") .. "end")
             compat_loaded = true
          end
-         load_code(name, (("local $NAME = _tl_compat and _tl_compat.$NAME or $NAME"):gsub("%$NAME", name)))
-
+         load_code(name, (("local $NAME = _tl_compat.$NAME or $NAME"):gsub("%$NAME", name)))
       end
    end
    program.y = 1

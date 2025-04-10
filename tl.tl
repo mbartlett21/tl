@@ -4606,6 +4606,35 @@ end
 
 function tl.parse_program(tokens: {Token}, errs: {Error}, filename?: string, parse_lang?: ParseLang): tl.Node, {string}
    errs = errs or {}
+   -- setmetatable(errs, {
+   --    __newindex = function(a: {Error}, k: any, v: any)
+   --          print()print()
+   --       print('setting1', k, v, debug.traceback())
+   --       for k2, v2 in pairs(v as table) do
+   --          print(k2, v2)
+   --       end
+   --       print(("%p"):format(v as table))
+   --       setmetatable(v as table, {
+   --          __newindex = function(a: table, k4: any, v4: any)
+   --          print()print()
+   --             print('setting2', k4, v4, debug.traceback())
+   --             for k3, v3 in pairs(v as table) do print(k3, v3) end
+   --             rawset(a, k4, v4)
+   --          end,
+   --          __index = function(a: table, k: any): any
+   --          print()print()
+   --             print('getting2', k)
+   --             return nil
+   --          end,
+   --          })
+   --       rawset(a as table, k, v)
+   --    end,
+   --          __index = function(a: {Error}, k: any): any
+   --          print()print()
+   --             print('getting1', k, debug.traceback())
+   --             return nil
+   --          end,
+   --    })
    local ps: ParseState = {
       tokens = tokens as {Token},
       errs = errs,
@@ -7287,6 +7316,62 @@ end
 
 local compat_code_cache: {string:Node} = {}
 
+local function assert_no_compat_errors(errors: {Error}, name: string)
+   if #errors ~= 0 then
+      local out = {}
+      for _, err in ipairs(errors) do
+         print(("%p"):format(err))
+         table.insert(out, err.y .. ":" .. err.x .. " " .. err.msg .. "\n")
+      end
+      error("Internal Compiler Error: compatibility library contains " .. name .. ":\n" .. table.concat(out), 2)
+   end
+end
+
+-- local acceptable_keys: {string} = {
+--    'if_blocks',
+--    'body',
+--    'decltuple',
+--    'vars',
+--    'body',
+--    'exp',
+--    'known',
+--    'exps',
+--    'e1',
+--    'e2',
+--    'op',
+--    'receiver',
+--    'w',
+--    'expected',
+--    -- 'rets',
+--    -- 'tuple',
+-- }
+
+-- local function set_the_y(c: table, visited: {table:boolean}, stack ?: {string})
+--    stack = stack or {}
+--    if visited[c] then return end
+--    visited[c] = true
+--    if c.y and c.y ~= 1 then
+--       local p = false
+--       for _, v in ipairs(stack) do
+--          if v is string then
+--             local found = false
+--             for _, v2 in ipairs(acceptable_keys) do if v == v2 then found=true end end
+--             p = p or not found
+--          end
+--       end
+--       if p and c.y as integer <= 3 then print(c.y, table.unpack(stack))
+--       elseif not p and c.y as integer > 3 then print(c.y, '!!!!!', table.unpack(stack)) end
+--       c.y = 1
+--    end
+--    for k, v in pairs(c) do
+--       if v is table then
+--          table.insert(stack, k as string)
+--          set_the_y(v, visited, stack)
+--          table.remove(stack)
+--       end
+--    end
+-- end
+
 local function add_compat_entries(program: Node, used_set: {string: boolean}, gen_compat: GenCompat)
    if gen_compat == "off" or not next(used_set) then
       return
@@ -7303,7 +7388,9 @@ local function add_compat_entries(program: Node, used_set: {string: boolean}, ge
    local function load_code(name: string, text: string)
       local code: Node = compat_code_cache[name]
       if not code then
-         code = tl.parse(text, "@internal", "lua") as Node
+         local syntax_errors: {Error}
+         code, syntax_errors = tl.parse(text, "@internal", "lua") as (Node, {Error})
+         assert_no_compat_errors(syntax_errors, "syntax errors: " .. text)
          tl.check(code, "@internal", { feat_lax = "off", gen_compat = "off" })
          compat_code_cache[name] = code
       end
@@ -7313,10 +7400,12 @@ local function add_compat_entries(program: Node, used_set: {string: boolean}, ge
       end
    end
 
-   local function req(m: string): string
-      return (gen_compat == "optional")
-             and "pcall(require, '" .. m .. "')"
-             or  "true, require('" .. m .. "')"
+   local function req(m: string, save_in: string): string
+      if gen_compat == "optional" then
+         return " local p, m = pcall(require, '" .. m .. "') if p then " .. save_in .. " = m end "
+      else
+         return " " .. save_in .. " = require('" .. m .. "') "
+      end
    end
 
    for _, name in ipairs(used_list) do
@@ -7325,9 +7414,9 @@ local function add_compat_entries(program: Node, used_set: {string: boolean}, ge
       elseif name == "table.pack" then
          load_code(name, [[local _tl_table_pack = table.pack or function(...) return { n = select("#", ...), ... } end]])
       elseif name == "bit32" then
-         load_code(name, "local bit32 = bit32; if not bit32 then local p, m = " .. req("bit32") .. "; if p then bit32 = m end")
+         load_code(name, "local bit32 = bit32; if not bit32 then" .. req("bit32", "bit32") .. "end")
       elseif name == "mt" then
-         load_code(name, "local _tl_mt = function(m, s, a, b) return (getmetatable(s == 1 and a or b)[m](a, b) end")
+         load_code(name, "local _tl_mt = function(m, s, a, b) return (getmetatable(s == 1 and a or b)[m](a, b)) end")
       elseif name == "math.maxinteger" then
          load_code(name, "local _tl_math_maxinteger = math.maxinteger or math.pow(2,53)")
       elseif name == "math.mininteger" then
@@ -7338,12 +7427,11 @@ local function add_compat_entries(program: Node, used_set: {string: boolean}, ge
          load_code(name, "local _ENV = _ENV or _G")
       else
          if not compat_loaded then
-            load_code("compat", "local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = " .. req("compat53.module") .. "; if p then _tl_compat = m end")
-            -- load_code("compat", "local _tl_compat={}; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = " .. req("compat53.module") .. "; if p then _tl_compat = m end")
+            load_code("compat", "local _tl_compat = {}; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then"
+               .. req("compat53.module", "_tl_compat") .. "end")
             compat_loaded = true
          end
-         load_code(name, (("local $NAME = _tl_compat and _tl_compat.$NAME or $NAME"):gsub("%$NAME", name)))
-         -- load_code(name, (("local $NAME = _tl_compat.$NAME or $NAME"):gsub("%$NAME", name)))
+         load_code(name, (("local $NAME = _tl_compat.$NAME or $NAME"):gsub("%$NAME", name)))
       end
    end
    program.y = 1
