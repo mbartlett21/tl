@@ -167,6 +167,7 @@ local function setup_env(tlconfig, filename)
          feat_lax = lax_mode and "on" or "off",
          feat_arity = tlconfig["feat_arity"],
          feat_strict_fns = tlconfig["feat_strict_fns"],
+         gen_type_verify = tlconfig["gen_type_verify"],
          gen_compat = tlconfig["gen_compat"],
          gen_target = tlconfig["gen_target"],
       },
@@ -329,6 +330,7 @@ local function validate_config(config)
       skip_compat53 = "boolean",
       feat_arity = { ["off"] = true, ["on"] = true },
       feat_strict_fns = { ["off"] = true, ["on"] = true },
+      gen_type_verify = { ["off"] = true, ["on"] = true },
       gen_compat = { ["off"] = true, ["optional"] = true, ["required"] = true },
       gen_target = { ["5.1"] = true, ["5.3"] = true, ["5.4"] = true },
       disable_warnings = "{string}",
@@ -393,6 +395,9 @@ local function get_args_parser()
          :choices({ "off", "on" })
 
    parser:option("--feat-strict-fns", "Uses co- and contravariant verification for function typing.")
+         :choices({ "off", "on" })
+
+   parser:option("--gen-type-verify", "Adds verification of types and their properties.")
          :choices({ "off", "on" })
 
    parser:option("--gen-compat", "Generate compatibility code for targeting different Lua VM versions.")
@@ -537,6 +542,7 @@ local function merge_config_and_args(tlconfig, args)
 
    tlconfig["feat_arity"] = args["feat_arity"] or tlconfig["feat_arity"]
    tlconfig["feat_strict_fns"] = args["feat_strict_fns"] or tlconfig["feat_strict_fns"]
+   tlconfig["gen_type_verify"] = args["gen_type_verify"] or tlconfig["gen_type_verify"]
 
    tlconfig["gen_target"] = args["gen_target"] or tlconfig["gen_target"]
    tlconfig["gen_compat"] = args["gen_compat"] or tlconfig["gen_compat"]

@@ -560,6 +560,7 @@ local record tl
       feat_lax: Feat
       feat_arity: Feat
       feat_strict_fns: Feat
+      gen_type_verify: Feat
       gen_compat: GenCompat
       gen_target: GenTarget
       run_internal_compiler_checks: boolean
@@ -7252,6 +7253,7 @@ local function require_module(w: Where, module_name: string, opts: CheckOptions,
          feat_lax = opts.feat_lax or save_defaults.feat_lax,
          feat_arity = opts.feat_arity or save_defaults.feat_arity,
          feat_strict_fns = opts.feat_strict_fns or save_defaults.feat_strict_fns,
+         gen_type_verify = opts.gen_type_verify or save_defaults.gen_type_verify,
          gen_compat = opts.gen_compat or save_defaults.gen_compat,
          gen_target = opts.gen_target or save_defaults.gen_target,
          run_internal_compiler_checks = opts.run_internal_compiler_checks or save_defaults.run_internal_compiler_checks,
@@ -7555,6 +7557,7 @@ do
 
       gen_compat: GenCompat
       gen_target: GenTarget
+      gen_type_verify: boolean
       feat_strict_fns: boolean
       feat_arity: boolean
       feat_lax: boolean
@@ -14558,6 +14561,176 @@ do
       return my_visit_node, my_visit_type
    end
 
+---[==[
+   local visit_node_verify: Visitor<TypeChecker, NodeKind, Node, Type> = {}
+
+   visit_node_verify.cbs = {
+      ["function"] = {
+         -- before = function(self: TypeChecker, node: Node)
+         -- end,
+         before_statements = function(self: TypeChecker, node: Node, children: {Type})
+            -- for i, v in ipairs(children) do print(i,v)end
+            -- local args = children[1]
+            -- assert(args is TupleType)
+
+            -- for arg_i, arg_t in ipairs(args.tuple) do
+            --    if arg_t is RecordLikeType then
+            --       -- we can do assertions on the fields
+            --       -- node is the function
+            --       for name, ty in fields_of(arg_t) do
+            --          print(name, ty)
+            --       end
+            --       -- print(print_record_def(arg_t))
+            --    end
+            -- end
+
+            -- self:add_internal_function_variables(node, args)
+         end,
+         -- after = function(self: TypeChecker, node: Node, children: {Type}): Type
+         -- end,
+      },
+      ["local_function"] = {
+         after = function(self: TypeChecker, node: Node, _children: {Type}): Type
+            -- if node.kind == 'local_function' then--or node.kind == 'statements' then
+            -- print(t)
+            print()
+            print'local function'
+            print(node.name.tk)
+            -- we have:
+            -- node.body: Statements
+            -- node.args: argument_list
+            -- node.name: ident
+            -- t[2]: ArgTypes
+            -- t[3]: RetTypes
+            --
+            -- for k, v in pairs((node.args[1] or {}) as table) do print(k,v)end
+
+            for argi, argv in ipairs(node.args) do
+               -- each argument has a argtype: Type
+               print(argi, argv.argtype)
+               -- we want to prepend a verification on the start
+               local ty = argv.argtype
+               if ty is NominalType then
+                  ty = ty.resolved or ty
+               end
+               -- for k,v in pairs(ty as table) do print('>',k,v)end
+               if ty is RecordLikeType then
+                  print'recordlike'
+                  -- we can verify each field
+                  --
+                  --
+                  --[[
+                  if <name> ~= nil then
+                     assert(
+                        type(<name>.field) == 'nil' or
+                        type(<name>.field) == 'this' or
+                        type(<name>.field) == 'that'
+                     )
+                     ...
+                  end
+                  --]]
+               end
+            end
+            -- for i, v in pairs(children as {integer:Type}) do
+            --    print(i,v)
+            --    -- if tostring(v) == '' then
+            --    --    for k, v in pairs(v as table) do print('!','',k,v)end
+            --    -- end
+            -- end
+            -- for k, v in pairs(node as table) do print(k,v) end
+            -- print()
+            -- end
+            -- print(t)
+
+            return nil
+         end
+      }
+   }
+
+   -- visit_node_verify.cbs["..."] = visit_node_verify.cbs["variable"]
+   -- visit_node_verify.cbs["argument_list"] = visit_node_verify.cbs["variable_list"]
+   -- visit_node_verify.cbs["expression_list"] = visit_node_verify.cbs["variable_list"]
+
+   visit_node_verify.after = function(_self: TypeChecker, node: Node, _children: {Type}, t: Type): Type
+      -- if node.expanded then
+      --    apply_macroexp(node)
+      -- end
+
+      -- print('test', node, t)
+      -- return t
+   end
+
+   -- local visit_type_verify: Visitor<TypeChecker, TypeName, Type, Type> = {}
+
+   -- visit_type_verify.after = function(_self: TypeChecker, ty: Type, xs: {Type}, _ret: Type): Type
+   --    return ty
+   -- end
+
+   local function add_type_verifications(self: TypeChecker, program: Node)
+      local tl_debug = TL_DEBUG
+      TL_DEBUG = nil
+
+      local visit_node_verify = visit_node_verify
+      -- local visit_type_verify = visit_type_verify
+      recurse_node(self, program, visit_node_verify, {})--visit_type_verify)
+
+      TL_DEBUG = tl_debug
+   end--]==]
+
+
+   -- local function gen_type_verify<S, N>(fn: VisitorAfter<S, N, Type>): VisitorAfter<S, N, Type>
+   --    return function(s: S, n: N, children: {Type}, t: Type): Type
+   --       t = fn and fn(s, n, children, t) or t
+
+   --       if type(t) ~= "table" then
+   --          error(((n as Node).kind or (n as Type).typename) .. " did not produce a type")
+   --       end
+   --       if type(t.typename) ~= "string" then
+   --          error(((n as Node).kind or (n as Type).typename) .. " type does not have a typename")
+   --       end
+
+   --       return t
+   --    end
+   -- end
+
+   local function gen_type_verify<S>(fn: VisitorAfter<S, Node, Type>): VisitorAfter<S, Node, Type>
+      return function(s: S, node: Node, children: {Type}, t: Type): Type
+         t = fn and fn(s, node, children, t) or t
+
+         -- if node.kind == 'local_function' then--or node.kind == 'statements' then
+         --    print(t)
+         --    print(node.name)
+         --    -- we have:
+         --    -- node.body: Statements
+         --    -- node.args: argument_list
+         --    -- node.name: ident
+         --    -- t[2]: ArgTypes
+         --    -- t[3]: RetTypes
+         --    --
+         --    -- for k, v in pairs((node.args[1] or {}) as table) do print(k,v)end
+
+         --    for argi, argv in ipairs(node.args) do
+         --       -- each argument has a argtype: Type
+         --       print(argi, argv.argtype)
+         --       -- we want to prepend a verification on the start
+
+         --    end
+         --    -- for i, v in pairs(children as {integer:Type}) do
+         --    --    print(i,v)
+         --    --    -- if tostring(v) == '' then
+         --    --    --    for k, v in pairs(v as table) do print('!','',k,v)end
+         --    --    -- end
+         --    -- end
+         --    -- for k, v in pairs(node as table) do print(k,v) end
+         --    -- print()
+         -- end
+         -- -- print(t)
+
+         -- node.debug_type = t
+         return t
+      end
+   end
+
    local function set_feat(feat: Feat, default: boolean): boolean
       if feat then
          return (feat == "on")
@@ -14606,6 +14779,7 @@ do
       self.feat_lax        = set_feat(opts.feat_lax        or env.defaults.feat_lax,        false)
       self.feat_arity      = set_feat(opts.feat_arity      or env.defaults.feat_arity,      true)
       self.feat_strict_fns = set_feat(opts.feat_strict_fns or env.defaults.feat_strict_fns, false)
+      self.gen_type_verify = set_feat(opts.gen_type_verify or env.defaults.gen_type_verify, false)
       self.gen_compat = opts.gen_compat or env.defaults.gen_compat or DEFAULT_GEN_COMPAT
       self.gen_target = opts.gen_target or env.defaults.gen_target or DEFAULT_GEN_TARGET
 
@@ -14655,6 +14829,12 @@ do
             visit_type, internal_compiler_check
          )
       end
+      if self.gen_type_verify then
+         visit_node, visit_type = patch_visitors(
+            visit_node, gen_type_verify--,
+            -- visit_type, gen_type_verify
+         )
+      end
       if self.collector then
          visit_node, visit_type = patch_visitors(
             visit_node, store_type_after,
@@ -14669,6 +14849,10 @@ do
 
       assert(ast.kind == "statements")
       recurse_node(self, ast, visit_node, visit_type)
+
+      if self.gen_type_verify then
+         add_type_verifications(self, ast)
+      end
 
       local global_scope = self.st[1]
       close_types(global_scope)
