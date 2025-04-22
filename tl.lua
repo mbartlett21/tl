@@ -14564,11 +14564,7 @@ self:expand_type(node, values, elements) })
 
    local visit_node_verify = {}
 
-   visit_node_verify.cbs = {
-      ["function"] = {
-
-
-         before_statements = function(self, node, children)
+   do
 
 
 
@@ -14579,23 +14575,11 @@ self:expand_type(node, values, elements) })
 
 
 
+      visit_node_verify.cbs = {
+         ["function"] = {
 
 
-
-
-
-
-         end,
-
-
-      },
-      ["local_function"] = {
-         after = function(self, node, _children)
-
-
-            print()
-            print('local function')
-            print(node.name.tk)
+            before_statements = function(self, node, children)
 
 
 
@@ -14605,17 +14589,222 @@ self:expand_type(node, values, elements) })
 
 
 
-            for argi, argv in ipairs(node.args) do
 
-               print(argi, argv.argtype)
 
-               local ty = argv.argtype
-               if ty.typename == "nominal" then
-                  ty = ty.resolved or ty
+
+
+
+
+
+            end,
+
+
+         },
+         ["local_function"] = {
+            after = function(self, node, _children)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+               for argi, argv in ipairs(node.args) do
+
+
+
+                  local ty = argv.argtype
+                  if ty.typename == "nominal" then
+                     ty = ty.resolved or ty
+                  end
+
+
+                  if ty.typename == "array" then
+
+
+
+
+
+
+
+
+
+                  elseif ty.fields then
+                     local t = ty
+
+                     if t.is_userdata then goto next end
+
+
+
+
+
+
+
+
+
+                     local nodetouse = node.body[1] or argv
+
+                     local ifnode = node_at(nodetouse, { kind = "if" })
+                     ifnode.if_blocks = {}
+
+                     local nonnil = node_at(nodetouse, { kind = "op" })
+                     nonnil.op = an_operator(nodetouse, 2, "~=")
+                     nonnil.e1 = node_at(nodetouse, { kind = "variable", tk = argv.tk })
+                     nonnil.e2 = node_at(nodetouse, { kind = "nil", tk = "nil" })
+
+                     local stmts = node_at(nodetouse, { kind = "statements" })
+
+                     local block = node_at(nodetouse, { kind = "if_block" })
+                     block.if_parent = ifnode
+                     block.if_block_n = 1
+                     block.exp = nonnil
+                     block.body = stmts
+
+                     ifnode.if_blocks[1] = block
+                     ifnode.yend = nodetouse.y
+                     ifnode.xend = nodetouse.x
+
+                     local function addtypever(exp, expected)
+                        return node_at(nodetouse, {
+                           kind = "op",
+                           op = an_operator(nodetouse, 2, "@funcall"),
+                           e1 = node_at(nodetouse, { kind = "variable", tk = "assert" }),
+                           e2 = node_at(nodetouse, {
+                              kind = "expression_list",
+                              node_at(nodetouse, {
+                                 kind = "op",
+                                 op = an_operator(nodetouse, 2, "=="),
+                                 e1 = node_at(nodetouse, {
+                                    kind = "op",
+                                    op = an_operator(nodetouse, 2, "@funcall"),
+                                    e1 = node_at(nodetouse, { kind = "variable", tk = "type" }),
+                                    e2 = node_at(nodetouse, {
+                                       kind = "expression_list",
+                                       exp,
+                                    }),
+                                 }),
+                                 e2 = node_at(nodetouse, {
+                                    kind = "string",
+                                    conststr = expected,
+                                    tk = "\"" .. expected .. "\"",
+                                 }),
+                              }),
+                           }),
+                        })
+                     end
+
+
+
+                     table.insert(stmts, addtypever(
+                     node_at(nodetouse, { kind = "variable", tk = argv.tk }),
+                     "table"))
+
+
+
+
+                     local function addtypevernil(exp, expected)
+                        return node_at(nodetouse, {
+                           kind = "op",
+                           op = an_operator(nodetouse, 2, "@funcall"),
+                           e1 = node_at(nodetouse, { kind = "variable", tk = "assert" }),
+                           e2 = node_at(nodetouse, {
+                              kind = "expression_list",
+                              node_at(nodetouse, {
+                                 kind = "op",
+                                 op = an_operator(nodetouse, 2, "or"),
+                                 e1 = node_at(nodetouse, {
+                                    kind = "op",
+                                    op = an_operator(nodetouse, 2, "=="),
+                                    e1 = exp,
+                                    e2 = node_at(nodetouse, {
+                                       kind = "nil",
+                                       tk = "nil",
+                                    }),
+                                 }),
+                                 e2 = node_at(nodetouse, {
+                                    kind = "op",
+                                    op = an_operator(nodetouse, 2, "=="),
+                                    e1 = node_at(nodetouse, {
+                                       kind = "op",
+                                       op = an_operator(nodetouse, 2, "@funcall"),
+                                       e1 = node_at(nodetouse, { kind = "variable", tk = "type" }),
+                                       e2 = node_at(nodetouse, {
+                                          kind = "expression_list",
+                                          exp,
+                                       }),
+                                    }),
+                                    e2 = node_at(nodetouse, {
+                                       kind = "string",
+                                       conststr = expected,
+                                       tk = "\"" .. expected .. "\"",
+                                    }),
+                                 }),
+                              }),
+                           }),
+                        })
+                     end
+
+                     for _, k in ipairs(t.field_order) do
+                        local v = t.fields[k]
+                        local access = node_at(nodetouse, {
+                           kind = "op",
+                           op = an_operator(nodetouse, 2, "."),
+                           e1 = node_at(nodetouse, { kind = "variable", tk = argv.tk }),
+                           e2 = node_at(nodetouse, { kind = "identifier", tk = k }),
+                        })
+                        if is_numeric_type(v) then
+                           table.insert(stmts, addtypevernil(
+                           access,
+                           "number"))
+
+                        elseif v.typename == "string" then
+                           table.insert(stmts, addtypevernil(
+                           access,
+                           "string"))
+
+                        elseif v.typename == "boolean" then
+                           table.insert(stmts, addtypevernil(
+                           access,
+                           "boolean"))
+
+                        end
+
+                     end
+
+
+
+                     table.insert(node.body, 1, ifnode)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                  end
+                  ::next::
                end
 
-               if ty.fields then
-                  print('recordlike')
 
 
 
@@ -14626,38 +14815,23 @@ self:expand_type(node, values, elements) })
 
 
 
-
-
-
-               end
-            end
-
-
-
+               return nil
+            end,
+         },
+      }
 
 
 
 
 
-
-
-
-            return nil
-         end,
-      },
-   }
-
-
-
-
-
-   visit_node_verify.after = function(_self, node, _children, t)
+      visit_node_verify.after = function(_self, node, _children, t)
 
 
 
 
 
 
+      end
    end
 
 
