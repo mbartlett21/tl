@@ -14576,10 +14576,7 @@ self:expand_type(node, values, elements) })
 
 
       visit_node_verify.cbs = {
-         ["function"] = {
-
-
-            before_statements = function(self, node, children)
+         ["function"] = {},
 
 
 
@@ -14596,12 +14593,15 @@ self:expand_type(node, values, elements) })
 
 
 
-            end,
 
 
-         },
+
+
+
+
+
          ["local_function"] = {
-            after = function(self, node, _children)
+            after = function(_self, node, _children)
 
 
 
@@ -14616,7 +14616,7 @@ self:expand_type(node, values, elements) })
 
 
 
-               for argi, argv in ipairs(node.args) do
+               for _argi, argv in ipairs(node.args) do
 
 
 
@@ -14649,7 +14649,17 @@ self:expand_type(node, values, elements) })
 
 
 
-                     local nodetouse = node.body[1] or argv
+
+
+
+
+
+
+
+
+
+
+                     local nodetouse = argv
 
                      local ifnode = node_at(nodetouse, { kind = "if" })
                      ifnode.if_blocks = {}
@@ -14801,6 +14811,7 @@ self:expand_type(node, values, elements) })
 
 
 
+
                   end
                   ::next::
                end
@@ -14824,14 +14835,14 @@ self:expand_type(node, values, elements) })
 
 
 
-      visit_node_verify.after = function(_self, node, _children, t)
 
 
 
 
 
 
-      end
+
+
    end
 
 

@@ -14579,29 +14579,29 @@ do
          ["function"] = {
             -- before = function(self: TypeChecker, node: Node)
             -- end,
-            before_statements = function(self: TypeChecker, node: Node, children: {Type})
-               -- for i, v in ipairs(children) do print(i,v)end
-               -- local args = children[1]
-               -- assert(args is TupleType)
+            -- before_statements = function(self: TypeChecker, node: Node, children: {Type})
+            --    -- for i, v in ipairs(children) do print(i,v)end
+            --    -- local args = children[1]
+            --    -- assert(args is TupleType)
 
-               -- for arg_i, arg_t in ipairs(args.tuple) do
-               --    if arg_t is RecordLikeType then
-               --       -- we can do assertions on the fields
-               --       -- node is the function
-               --       for name, ty in fields_of(arg_t) do
-               --          print(name, ty)
-               --       end
-               --       -- print(print_record_def(arg_t))
-               --    end
-               -- end
+            --    -- for arg_i, arg_t in ipairs(args.tuple) do
+            --    --    if arg_t is RecordLikeType then
+            --    --       -- we can do assertions on the fields
+            --    --       -- node is the function
+            --    --       for name, ty in fields_of(arg_t) do
+            --    --          print(name, ty)
+            --    --       end
+            --    --       -- print(print_record_def(arg_t))
+            --    --    end
+            --    -- end
 
-               -- self:add_internal_function_variables(node, args)
-            end,
+            --    -- self:add_internal_function_variables(node, args)
+            -- end,
             -- after = function(self: TypeChecker, node: Node, children: {Type}): Type
             -- end,
          },
          ["local_function"] = {
-            after = function(self: TypeChecker, node: Node, _children: {Type}): Type
+            after = function(_self: TypeChecker, node: Node, _children: {Type}): Type
                -- if node.kind == "local_function" then--or node.kind == "statements" then
                -- print(t)
                -- print()
@@ -14616,9 +14616,9 @@ do
                --
                -- for k, v in pairs((node.args[1] or {}) as table) do print(k,v)end
 
-               for argi, argv in ipairs(node.args) do
+               for _argi, argv in ipairs(node.args) do
                   -- each argument has a argtype: Type
-                  -- print(argi, argv.argtype)
+                  -- print(_argi, argv.argtype)
                   -- we want to prepend a verification on the start
                   local ty = argv.argtype
                   if ty is NominalType then
@@ -14649,7 +14649,17 @@ do
                      --    print('>', k, v)
                      -- end
 
-                     local nodetouse = node.body[1] or argv
+                     -- local firststmt = node.body[1]
+
+                     -- local ytouse = firststmt.y or argv.y
+                     -- if (not firststmt) or firststmt.y == ytouse then
+                     --    ytouse = math.max() argv.y
+                     -- end
+
+                     -- local origy = argv.y
+                     -- argv.y = ytouse
+
+                     local nodetouse = argv
 
                      local ifnode = node_at(nodetouse, { kind = "if" })
                      ifnode.if_blocks = {}
@@ -14781,6 +14791,7 @@ do
                      -- node_at(nodetouse, { kind = "op", op = an_operator(nodetouse, 2, "is"), })
 
                      table.insert(node.body, 1, ifnode)
+                     -- argv.y = origy
 
                      -- print(ifnode)
                      -- print(nonnil)
@@ -14824,14 +14835,14 @@ do
       -- visit_node_verify.cbs["argument_list"] = visit_node_verify.cbs["variable_list"]
       -- visit_node_verify.cbs["expression_list"] = visit_node_verify.cbs["variable_list"]
 
-      visit_node_verify.after = function(_self: TypeChecker, node: Node, _children: {Type}, t: Type): Type
-         -- if node.expanded then
-         --    apply_macroexp(node)
-         -- end
+      -- visit_node_verify.after = function(_self: TypeChecker, _node: Node, _children: {Type}, _t: Type): Type
+      --    -- if node.expanded then
+      --    --    apply_macroexp(node)
+      --    -- end
 
-         -- print('test', node, t)
-         -- return t
-      end
+      --    -- print('test', node, t)
+      --    -- return t
+      -- end
    end
 
    -- local visit_type_verify: Visitor<TypeChecker, TypeName, Type, Type> = {}
