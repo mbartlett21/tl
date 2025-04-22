@@ -555,6 +555,7 @@ local record tl
    record CheckOptions
       feat_lax: Feat
       feat_arity: Feat
+      gen_type_verify: Feat
       gen_compat: GenCompat
       gen_target: GenTarget
       run_internal_compiler_checks: boolean
@@ -7246,6 +7247,7 @@ local function require_module(w: Where, module_name: string, opts: CheckOptions,
       local defaults <total>: CheckOptions = {
          feat_lax = opts.feat_lax or save_defaults.feat_lax,
          feat_arity = opts.feat_arity or save_defaults.feat_arity,
+         gen_type_verify = opts.gen_type_verify or save_defaults.gen_type_verify,
          gen_compat = opts.gen_compat or save_defaults.gen_compat,
          gen_target = opts.gen_target or save_defaults.gen_target,
          run_internal_compiler_checks = opts.run_internal_compiler_checks or save_defaults.run_internal_compiler_checks,
@@ -7549,6 +7551,7 @@ do
 
       gen_compat: GenCompat
       gen_target: GenTarget
+      gen_type_verify: boolean
       feat_arity: boolean
       feat_lax: boolean
 
@@ -10530,7 +10533,7 @@ do
       local visit_node: Visitor<nil, NodeKind, Node, boolean> = {
          cbs = {
             ["assignment"] = {
-               after = function(_: nil, node: Node, _children: {boolean}): boolean
+               after = function(_: nil, node: Node, _children: {boolean|integer}): boolean
                   for _, v in ipairs(node.vars) do
                      if v.kind == "variable" and v.tk == name then
                         return true
@@ -10540,11 +10543,10 @@ do
                end
             }
          },
-         after = function(_: nil, _node: Node, children: {boolean}, ret: boolean): boolean
+         after = function(_: nil, _node: Node, children: {boolean|integer}, ret: boolean): boolean
             ret = ret or false
             for _, c in ipairs(children) do
-               local ca = c as any
-               if ca is boolean then
+               if c is boolean then
                   ret = ret or c
                end
             end
@@ -14551,6 +14553,239 @@ do
       return my_visit_node, my_visit_type
    end
 
+   local visit_node_verify: Visitor<nil, NodeKind, Node, nil> = {}
+
+   do
+      local function generate_type_verification(nodetouse: Node, expr: Node, ty: Type, name ?: string): Node--, node_at(nodetouse, { kind = "variable", tk = argv.tk }), ty)
+         name = name or expr.tk or '<unknown>'
+         local ifnode = node_at(nodetouse, {
+            kind = "if",
+            yend = nodetouse.y,
+            xend = nodetouse.x,
+         })
+
+         local stmts = node_at(nodetouse, { kind = "statements" })
+
+         -- it seems like we should accept false and nil and <type>, so just do a simple if
+         local block = node_at(nodetouse, {
+            kind = "if_block",
+            if_parent = ifnode,
+            if_block_n = 1,
+            exp = expr,
+            body = stmts,
+         })
+         ifnode.if_blocks = {block}
+
+         local function add_unassert(aexpr: Node, err: Node)
+            local assertifnode = node_at(nodetouse, {
+               kind = "if",
+               yend = nodetouse.y,
+               xend = nodetouse.x,
+            })
+
+            local substmts = node_at(nodetouse, { kind = "statements" })
+
+            local errorblock = node_at(nodetouse, {
+               kind = "if_block",
+               if_parent = assertifnode,
+               if_block_n = 1,
+               exp = aexpr,
+               body = substmts,
+            })
+            assertifnode.if_blocks = {errorblock}
+            table.insert(substmts,
+               node_at(nodetouse, {
+                  kind = "op",
+                  op = an_operator(nodetouse, 2, "@funcall"),
+                  e1 = node_at(nodetouse, { kind = "variable", tk = "error" }),
+                  e2 = node_at(nodetouse, {
+                     kind = "expression_list",
+                     err
+                  })
+               })
+            )
+            table.insert(stmts, assertifnode)
+         end
+
+         local function add_error(errstr: string)
+            table.insert(stmts,
+               node_at(nodetouse, {
+                  kind = "op",
+                  op = an_operator(nodetouse, 2, "@funcall"),
+                  e1 = node_at(nodetouse, { kind = "variable", tk = "error" }),
+                  e2 = node_at(nodetouse, {
+                     kind = "expression_list",
+                     node_at(nodetouse, {
+                        kind = "string",
+                        conststr = errstr,
+                        tk = string.format("%q", errstr),
+                     })
+                  })
+               })
+            )
+         end
+
+         local function add_simple_type_assert(aexpr: Node, expected: string)
+            local errstr = "expected " .. name .. " to be a " .. expected .. ", was "
+            return add_unassert(
+               node_at(nodetouse, {
+                  kind = "op",
+                  op = an_operator(nodetouse, 2, "~="),
+                  e1 = node_at(nodetouse, {
+                     kind = "op",
+                     op = an_operator(nodetouse, 2, "@funcall"),
+                     e1 = node_at(nodetouse, { kind = "variable", tk = "type" }),
+                     e2 = node_at(nodetouse, {
+                        kind = "expression_list",
+                        aexpr,
+                     })
+                  }),
+                  e2 = node_at(nodetouse, {
+                     kind = "string",
+                     conststr = expected,
+                     tk = "\"" .. expected .. "\""
+                  })
+               }),
+               node_at(nodetouse, {
+                  kind = "op",
+                  op = an_operator(nodetouse, 2, ".."),
+                  e1 = node_at(nodetouse, {
+                     kind = "string",
+                     conststr = errstr,
+                     tk = string.format("%q", errstr),
+                  }),
+                  e2 = node_at(nodetouse, {
+                     kind = "op",
+                     op = an_operator(nodetouse, 2, "@funcall"),
+                     e1 = node_at(nodetouse, { kind = "variable", tk = "type" }),
+                     e2 = node_at(nodetouse, {
+                        kind = "expression_list",
+                        aexpr,
+                     }),
+                  }),
+               })
+            )
+         end
+
+         -- now we fill out the statements.
+         -- first verify type(expr) or math.type(expr)
+         if ty is NilType then
+            add_error("expected " .. name .. " to be nil")
+         elseif ty is BooleanType then
+            add_simple_type_assert(expr, "boolean")
+         elseif ty is NumericType then
+            add_simple_type_assert(expr, "number")
+         elseif ty is EnumType or ty is StringType then
+            add_simple_type_assert(expr, "string")
+         elseif ty is FunctionType then
+            add_simple_type_assert(expr, "function") -- TODO: can we allow tables with __call metamethod
+         elseif ty is RecordLikeType then
+            if ty.field_order[1] and not ty.is_userdata then
+               for _, key in ipairs(ty.field_order) do
+                  local subty = ty.fields[key]
+                  local access = node_at(nodetouse, {
+                     kind = "op",
+                     op = an_operator(nodetouse, 2, "."),
+                     e1 = expr,
+                     e2 = node_at(nodetouse, { kind = "identifier", tk = key }),
+                  })
+                  local stmt = generate_type_verification(nodetouse, access, subty, name .. "." .. key)
+                  if stmt then
+                     table.insert(stmts, stmt)
+                  end
+               end
+            end
+         elseif ty is ArrayLikeType then
+            if not (ty is RecordLikeType and ty.is_userdata) then
+               add_simple_type_assert(expr, "table")
+               -- we can then do a forloop to check the items
+               local substmts = node_at(nodetouse, {
+                  kind = "statements",
+               })
+               local forloop = node_at(nodetouse, {
+                  kind = "forin",
+                  vars = node_at(nodetouse, {
+                     kind = "variable_list",
+                     node_at(nodetouse, { kind = "variable", tk = "_tl_index" }),
+                     node_at(nodetouse, { kind = "variable", tk = "_tl_value" }),
+                  }),
+                  exps = node_at(nodetouse, {
+                     kind = "expression_list",
+                     node_at(nodetouse, {
+                        kind = "op",
+                        op = an_operator(nodetouse, 2, "@funcall"),
+                        e1 = node_at(nodetouse, { kind = "variable", tk = "ipairs" }),
+                        e2 = node_at(nodetouse, {
+                           kind = "expression_list",
+                           expr,
+                        }),
+                     }),
+                  }),
+                  body = substmts,
+                  yend = nodetouse.y,
+                  xend = nodetouse.x,
+               })
+
+               local subty = ty.elements
+
+               -- we can then add the assert to it
+               local access = node_at(nodetouse, { kind = "identifier", tk = "_tl_value" })
+               local substmt = generate_type_verification(nodetouse, access, subty, name .. "[_]")
+               if substmt then
+                  table.insert(substmts, substmt)
+                  table.insert(stmts, forloop)
+               end
+            end
+         end
+
+         if stmts[1] then
+            return ifnode
+         end
+      end
+
+      local functionvisit = {
+         after = function(_self: nil, node: Node, _children: {nil}): nil
+            for argi, argv in ipairs(node.args) do
+               -- we want to prepend a verification on the start
+               if (node.is_method and argi == 1) or argv.tk == "..." then
+                  goto next
+               end
+               local ty = argv.argtype
+               if ty is NominalType then
+                  ty = ty.resolved or ty
+               end
+
+               local nodetouse = argv
+
+               local stmt = generate_type_verification(nodetouse, node_at(nodetouse, { kind = "variable", tk = argv.tk }), ty)
+
+               if stmt then
+                  table.insert(node.body, 1, stmt)
+               end
+               ::next::
+            end
+
+            return nil
+         end
+      }
+
+      visit_node_verify.cbs = {
+         ["function"] = functionvisit,
+         ["global_function"] = functionvisit,
+         ["record_function"] = functionvisit,
+         ["local_function"] = functionvisit,
+      }
+   end
+
+   local function add_type_verifications(program: Node)
+      local tl_debug = TL_DEBUG
+      TL_DEBUG = nil
+
+      recurse_node(nil, program, visit_node_verify, {})
+
+      TL_DEBUG = tl_debug
+   end
+
    local function set_feat(feat: Feat, default: boolean): boolean
       if feat then
          return (feat == "on")
@@ -14596,8 +14831,9 @@ do
          __tostring = function(): string return "TypeChecker" end,
       })
 
-      self.feat_lax   = set_feat(opts.feat_lax   or env.defaults.feat_lax,   false)
-      self.feat_arity = set_feat(opts.feat_arity or env.defaults.feat_arity, true)
+      self.feat_lax        = set_feat(opts.feat_lax        or env.defaults.feat_lax,        false)
+      self.feat_arity      = set_feat(opts.feat_arity      or env.defaults.feat_arity,      true)
+      self.gen_type_verify = set_feat(opts.gen_type_verify or env.defaults.gen_type_verify, false)
       self.gen_compat = opts.gen_compat or env.defaults.gen_compat or DEFAULT_GEN_COMPAT
       self.gen_target = opts.gen_target or env.defaults.gen_target or DEFAULT_GEN_TARGET
 
@@ -14667,6 +14903,10 @@ do
       self.errs:check_var_usage(global_scope, true)
 
       clear_redundant_errors(self.errs.errors)
+
+      if self.gen_type_verify then
+         add_type_verifications(ast)
+      end
 
       add_compat_entries(ast, self.all_needs_compat, self.gen_compat)
 
