@@ -101,6 +101,7 @@ describe("tl types works like check", function()
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
          local types = json.decode(output)
+         if not types then print(output) end
          -- "symbols" reports a single file
          assert(types.symbols)
          local y, x = 1, 1
@@ -161,6 +162,7 @@ describe("tl types works like check", function()
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
          local types = json.decode(output)
+         if not types then print(output) end
          local n = 0
          for _ in pairs(types) do
             n = n + 1
@@ -198,6 +200,7 @@ describe("tl types works like check", function()
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
          local types = json.decode(output)
+         if not types then print(output) end
          local n = 0
          for _ in pairs(types) do
             n = n + 1
@@ -347,6 +350,7 @@ describe("tl types works like check", function()
          local output = pd:read("*a")
          util.assert_popen_close(1, pd:close())
          local types = json.decode(output)
+         if not types then print(output) end
          assert(types.by_pos)
          local by_pos = types.by_pos[next(types.by_pos)]
          assert(by_pos["1"])
@@ -365,6 +369,7 @@ describe("tl types works like check", function()
          local output = pd:read("*a")
          util.assert_popen_close(0, pd:close())
          local types = json.decode(output)
+         if not types then print(output) end
          assert(types.by_pos)
          local by_pos = types.by_pos[next(types.by_pos)]
          assert.same({
