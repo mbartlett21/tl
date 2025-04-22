@@ -14719,7 +14719,8 @@ do
 
 
 
-                     local function addtypevernil(exp: Node, expected: string): Node
+                     local function addtypevernil(exp: Node, expected: string, exptstr ?: string): Node
+                        exptstr = exptstr or ("expected to be '" .. expected .. "'")
                         return node_at(nodetouse, {
                            kind = "op",
                            op = an_operator(nodetouse, 2, "@funcall"),
@@ -14756,6 +14757,11 @@ do
                                        tk = "\"" .. expected .. "\""
                                     })
                                  })
+                              }),
+                              node_at(nodetouse, {
+                                 kind = "string",
+                                 conststr = exptstr,
+                                 tk = "\"" .. exptstr .. "\""
                               })
                            })
                         })
@@ -14772,17 +14778,20 @@ do
                         if v is NumericType then
                            table.insert(stmts, addtypevernil(
                               access,
-                              "number"
+                              "number",
+                              "expected " .. argv.tk .. "." .. k .. " to be a number"
                            ))
                         elseif v is StringType then
                            table.insert(stmts, addtypevernil(
                               access,
-                              "string"
+                              "string",
+                              "expected " .. argv.tk .. "." .. k .. " to be a string"
                            ))
                         elseif v is BooleanType then
                            table.insert(stmts, addtypevernil(
                               access,
-                              "boolean"
+                              "boolean",
+                              "expected " .. argv.tk .. "." .. k .. " to be a boolean"
                            ))
                         end
                         -- print('>', k, v)

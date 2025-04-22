@@ -14719,7 +14719,8 @@ self:expand_type(node, values, elements) })
 
 
 
-                     local function addtypevernil(exp, expected)
+                     local function addtypevernil(exp, expected, exptstr)
+                        exptstr = exptstr or ("expected to be '" .. expected .. "'")
                         return node_at(nodetouse, {
                            kind = "op",
                            op = an_operator(nodetouse, 2, "@funcall"),
@@ -14757,6 +14758,11 @@ self:expand_type(node, values, elements) })
                                     }),
                                  }),
                               }),
+                              node_at(nodetouse, {
+                                 kind = "string",
+                                 conststr = exptstr,
+                                 tk = "\"" .. exptstr .. "\"",
+                              }),
                            }),
                         })
                      end
@@ -14772,17 +14778,20 @@ self:expand_type(node, values, elements) })
                         if is_numeric_type(v) then
                            table.insert(stmts, addtypevernil(
                            access,
-                           "number"))
+                           "number",
+                           "expected " .. argv.tk .. "." .. k .. " to be a number"))
 
                         elseif v.typename == "string" then
                            table.insert(stmts, addtypevernil(
                            access,
-                           "string"))
+                           "string",
+                           "expected " .. argv.tk .. "." .. k .. " to be a string"))
 
                         elseif v.typename == "boolean" then
                            table.insert(stmts, addtypevernil(
                            access,
-                           "boolean"))
+                           "boolean",
+                           "expected " .. argv.tk .. "." .. k .. " to be a boolean"))
 
                         end
 
