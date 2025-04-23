@@ -14620,35 +14620,33 @@ do
             )
             table.insert(stmts, assertifnode)
          end
-         local function add_assert(aexpr: Node, err: Node)
-            local notexpr = node_at(nodetouse, {
-               kind = "op",
-               op = an_operator(nodetouse, 1, "not"),
-               e1 = node_at(nodetouse, {
-                  kind = "paren",
-                  e1 = aexpr,
-               }),
-            })
+         -- local function add_assert(aexpr: Node, err: Node)
+         --    local notexpr = node_at(nodetouse, {
+         --       kind = "op",
+         --       op = an_operator(nodetouse, 1, "not"),
+         --       e1 = node_at(nodetouse, {
+         --          kind = "paren",
+         --          e1 = aexpr,
+         --       }),
+         --    })
 
-            return add_unassert(notexpr, err)
-         end
+         --    return add_unassert(notexpr, err)
+         -- end
 
-         local function add_assert_fixstr(aexpr: Node, errstr: string)
-            return add_assert(aexpr,
+         local function add_error(errstr: string)
+            table.insert(stmts,
                node_at(nodetouse, {
-                  kind = "string",
-                  conststr = errstr,
-                  tk = string.format("%q", errstr),
-               })
-            )
-         end
-
-         local function add_unassert_fixstr(aexpr: Node, errstr: string)
-            return add_unassert(aexpr,
-               node_at(nodetouse, {
-                  kind = "string",
-                  conststr = errstr,
-                  tk = string.format("%q", errstr),
+                  kind = "op",
+                  op = an_operator(nodetouse, 2, "@funcall"),
+                  e1 = node_at(nodetouse, { kind = "variable", tk = "error" }),
+                  e2 = node_at(nodetouse, {
+                     kind = "expression_list",
+                     node_at(nodetouse, {
+                        kind = "string",
+                        conststr = errstr,
+                        tk = string.format("%q", errstr),
+                     })
+                  })
                })
             )
          end
@@ -14698,10 +14696,7 @@ do
          -- now we fill out the statements.
          -- first verify type(expr) or math.type(expr)
          if ty is NilType then
-            add_unassert_fixstr(
-               node_at(nodetouse, { kind = "boolean", tk = "true" }),
-               "expected " .. name .. " to be nil"
-            )
+            add_error("expected " .. name .. " to be nil")
          elseif ty is BooleanType then
             add_simple_type_assert(expr, "boolean")
          elseif ty is NumericType then

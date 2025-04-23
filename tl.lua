@@ -14620,35 +14620,33 @@ self:expand_type(node, values, elements) })
 
             table.insert(stmts, assertifnode)
          end
-         local function add_assert(aexpr, err)
-            local notexpr = node_at(nodetouse, {
+
+
+
+
+
+
+
+
+
+
+
+
+
+         local function add_error(errstr)
+            table.insert(stmts,
+            node_at(nodetouse, {
                kind = "op",
-               op = an_operator(nodetouse, 1, "not"),
-               e1 = node_at(nodetouse, {
-                  kind = "paren",
-                  e1 = aexpr,
+               op = an_operator(nodetouse, 2, "@funcall"),
+               e1 = node_at(nodetouse, { kind = "variable", tk = "error" }),
+               e2 = node_at(nodetouse, {
+                  kind = "expression_list",
+                  node_at(nodetouse, {
+                     kind = "string",
+                     conststr = errstr,
+                     tk = string.format("%q", errstr),
+                  }),
                }),
-            })
-
-            return add_unassert(notexpr, err)
-         end
-
-         local function add_assert_fixstr(aexpr, errstr)
-            return add_assert(aexpr,
-            node_at(nodetouse, {
-               kind = "string",
-               conststr = errstr,
-               tk = string.format("%q", errstr),
-            }))
-
-         end
-
-         local function add_unassert_fixstr(aexpr, errstr)
-            return add_unassert(aexpr,
-            node_at(nodetouse, {
-               kind = "string",
-               conststr = errstr,
-               tk = string.format("%q", errstr),
             }))
 
          end
@@ -14698,10 +14696,7 @@ self:expand_type(node, values, elements) })
 
 
          if ty.typename == "nil" then
-            add_unassert_fixstr(
-            node_at(nodetouse, { kind = "boolean", tk = "true" }),
-            "expected " .. name .. " to be nil")
-
+            add_error("expected " .. name .. " to be nil")
          elseif ty.typename == "boolean" then
             add_simple_type_assert(expr, "boolean")
          elseif is_numeric_type(ty) then
