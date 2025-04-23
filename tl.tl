@@ -10540,7 +10540,7 @@ do
       local visit_node: Visitor<nil, NodeKind, Node, boolean> = {
          cbs = {
             ["assignment"] = {
-               after = function(_: nil, node: Node, _children: {boolean}): boolean
+               after = function(_: nil, node: Node, _children: {boolean|integer}): boolean
                   for _, v in ipairs(node.vars) do
                      if v.kind == "variable" and v.tk == name then
                         return true
