@@ -14590,21 +14590,11 @@ self:expand_type(node, values, elements) })
          })
          ifnode.if_blocks = { block }
 
-         local function add_assert(aexpr, err)
+         local function add_unassert(aexpr, err)
             local assertifnode = node_at(nodetouse, {
                kind = "if",
                yend = nodetouse.y,
                xend = nodetouse.x,
-            })
-
-
-            local notexpr = node_at(nodetouse, {
-               kind = "op",
-               op = an_operator(nodetouse, 1, "not"),
-               e1 = node_at(nodetouse, {
-                  kind = "paren",
-                  e1 = aexpr,
-               }),
             })
 
             local substmts = node_at(nodetouse, { kind = "statements" })
@@ -14613,7 +14603,7 @@ self:expand_type(node, values, elements) })
                kind = "if_block",
                if_parent = assertifnode,
                if_block_n = 1,
-               exp = notexpr,
+               exp = aexpr,
                body = substmts,
             })
             assertifnode.if_blocks = { errorblock }
@@ -14630,6 +14620,18 @@ self:expand_type(node, values, elements) })
 
             table.insert(stmts, assertifnode)
          end
+         local function add_assert(aexpr, err)
+            local notexpr = node_at(nodetouse, {
+               kind = "op",
+               op = an_operator(nodetouse, 1, "not"),
+               e1 = node_at(nodetouse, {
+                  kind = "paren",
+                  e1 = aexpr,
+               }),
+            })
+
+            return add_unassert(notexpr, err)
+         end
 
          local function add_assert_fixstr(aexpr, errstr)
             return add_assert(aexpr,
@@ -14641,12 +14643,22 @@ self:expand_type(node, values, elements) })
 
          end
 
+         local function add_unassert_fixstr(aexpr, errstr)
+            return add_unassert(aexpr,
+            node_at(nodetouse, {
+               kind = "string",
+               conststr = errstr,
+               tk = string.format("%q", errstr),
+            }))
+
+         end
+
          local function add_simple_type_assert(aexpr, expected)
             local errstr = "expected " .. name .. " to be a " .. expected .. ", was "
-            return add_assert(
+            return add_unassert(
             node_at(nodetouse, {
                kind = "op",
-               op = an_operator(nodetouse, 2, "=="),
+               op = an_operator(nodetouse, 2, "~="),
                e1 = node_at(nodetouse, {
                   kind = "op",
                   op = an_operator(nodetouse, 2, "@funcall"),
@@ -14686,8 +14698,8 @@ self:expand_type(node, values, elements) })
 
 
          if ty.typename == "nil" then
-            add_assert_fixstr(
-            node_at(nodetouse, { kind = "boolean", tk = "false" }),
+            add_unassert_fixstr(
+            node_at(nodetouse, { kind = "boolean", tk = "true" }),
             "expected " .. name .. " to be nil")
 
          elseif ty.typename == "boolean" then
