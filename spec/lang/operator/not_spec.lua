@@ -41,7 +41,7 @@ describe("not", function()
       ]]
 
       local result = tl.process_string(code)
-      local output = tl.pretty_print_ast(result.ast, true)
+      local output = tl.pretty_print_ast(result.ast, nil, true)
 
       assert.same(trim_code(code), trim_code(output))
    end)
@@ -61,7 +61,7 @@ describe("not", function()
       ]]
 
       local result = tl.process_string(code)
-      local output = tl.pretty_print_ast(result.ast, true)
+      local output = tl.pretty_print_ast(result.ast, nil, true)
 
       assert.same(trim_code(code), trim_code(output))
    end)
