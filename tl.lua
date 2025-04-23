@@ -14571,15 +14571,8 @@ self:expand_type(node, values, elements) })
             xend = nodetouse.x,
          })
 
-
-
-
-
-
-
-
-
          local stmts = node_at(nodetouse, { kind = "statements" })
+
 
          local block = node_at(nodetouse, {
             kind = "if_block",
@@ -14620,18 +14613,6 @@ self:expand_type(node, values, elements) })
 
             table.insert(stmts, assertifnode)
          end
-
-
-
-
-
-
-
-
-
-
-
-
 
          local function add_error(errstr)
             table.insert(stmts,
@@ -14719,7 +14700,6 @@ self:expand_type(node, values, elements) })
                   if stmt then
                      table.insert(stmts, stmt)
                   end
-
                end
             end
          elseif ty.elements then
@@ -14772,25 +14752,11 @@ self:expand_type(node, values, elements) })
 
       local functionvisit = {
          after = function(_self, node, _children)
-
-
-
-
             for argi, argv in ipairs(node.args) do
 
-
-
-
-
-
-               if (node.is_method and argi == 1) or
-                  argv.tk == "..." then
-
+               if (node.is_method and argi == 1) or argv.tk == "..." then
                   goto next
                end
-
-
-
                local ty = argv.argtype
                if ty.typename == "nominal" then
                   ty = ty.resolved or ty
@@ -14818,11 +14784,10 @@ self:expand_type(node, values, elements) })
       }
    end
 
-   local function add_type_verifications(_self, program)
+   local function add_type_verifications(program)
       local tl_debug = TL_DEBUG
       TL_DEBUG = nil
 
-      local visit_node_verify = visit_node_verify
       recurse_node(nil, program, visit_node_verify, {})
 
       TL_DEBUG = tl_debug
@@ -14941,15 +14906,15 @@ self:expand_type(node, values, elements) })
       assert(ast.kind == "statements")
       recurse_node(self, ast, visit_node, visit_type)
 
-      if self.gen_type_verify then
-         add_type_verifications(nil, ast)
-      end
-
       local global_scope = self.st[1]
       close_types(global_scope)
       self.errs:check_var_usage(global_scope, true)
 
       clear_redundant_errors(self.errs.errors)
+
+      if self.gen_type_verify then
+         add_type_verifications(ast)
+      end
 
       add_compat_entries(ast, self.all_needs_compat, self.gen_compat)
 

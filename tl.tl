@@ -14571,16 +14571,9 @@ do
             xend = nodetouse.x,
          })
 
-         -- it seems like we should accept false and nil and <type>
-         -- local nonnil = node_at(nodetouse, {
-         --    kind = "op",
-         --    op = an_operator(nodetouse, 2, "~="),
-         --    e1 = expr,
-         --    e2 = node_at(nodetouse, { kind = "nil", tk = "nil" }),
-         -- })
-
          local stmts = node_at(nodetouse, { kind = "statements" })
 
+         -- it seems like we should accept false and nil and <type>, so just do a simple if
          local block = node_at(nodetouse, {
             kind = "if_block",
             if_parent = ifnode,
@@ -14620,18 +14613,6 @@ do
             )
             table.insert(stmts, assertifnode)
          end
-         -- local function add_assert(aexpr: Node, err: Node)
-         --    local notexpr = node_at(nodetouse, {
-         --       kind = "op",
-         --       op = an_operator(nodetouse, 1, "not"),
-         --       e1 = node_at(nodetouse, {
-         --          kind = "paren",
-         --          e1 = aexpr,
-         --       }),
-         --    })
-
-         --    return add_unassert(notexpr, err)
-         -- end
 
          local function add_error(errstr: string)
             table.insert(stmts,
@@ -14719,7 +14700,6 @@ do
                   if stmt then
                      table.insert(stmts, stmt)
                   end
-                  -- print('>', key, subty)
                end
             end
          elseif ty is ArrayLikeType then
@@ -14772,25 +14752,11 @@ do
 
       local functionvisit = {
          after = function(_self: nil, node: Node, _children: {nil}): nil
-         -- print()
-         -- print(node)
-            -- for k, v in pairs(node as table) do print('>',k, v) end
-            -- for k, v in pairs(node.args as table) do print('>','>',k, v) end
             for argi, argv in ipairs(node.args) do
-               -- print(argv.y)
-               -- print(argv.yend)
-               -- for k, v in pairs(node as table) do print(k, v) end
-               -- each argument has a argtype: Type
-               -- print(_argi, argv.argtype)
                -- we want to prepend a verification on the start
-               if (node.is_method and argi == 1)
-                  or argv.tk == "..."
-                  then
+               if (node.is_method and argi == 1) or argv.tk == "..." then
                   goto next
                end
-               -- print(argi, argv, argv.kind)
-            -- for k, v in pairs(argv as table) do print('>','(argv)',k, v) end
-               -- if argv.y > 6400 then error''end
                local ty = argv.argtype
                if ty is NominalType then
                   ty = ty.resolved or ty
@@ -14818,11 +14784,10 @@ do
       }
    end
 
-   local function add_type_verifications(_self: nil, program: Node)
+   local function add_type_verifications(program: Node)
       local tl_debug = TL_DEBUG
       TL_DEBUG = nil
 
-      local visit_node_verify = visit_node_verify
       recurse_node(nil, program, visit_node_verify, {})
 
       TL_DEBUG = tl_debug
@@ -14941,15 +14906,15 @@ do
       assert(ast.kind == "statements")
       recurse_node(self, ast, visit_node, visit_type)
 
-      if self.gen_type_verify then
-         add_type_verifications(nil, ast)
-      end
-
       local global_scope = self.st[1]
       close_types(global_scope)
       self.errs:check_var_usage(global_scope, true)
 
       clear_redundant_errors(self.errs.errors)
+
+      if self.gen_type_verify then
+         add_type_verifications(ast)
+      end
 
       add_compat_entries(ast, self.all_needs_compat, self.gen_compat)
 
