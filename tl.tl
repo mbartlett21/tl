@@ -7308,10 +7308,12 @@ local function add_compat_entries(program: Node, used_set: {string: boolean}, ge
       end
    end
 
-   local function req(m: string): string
-      return (gen_compat == "optional")
-             and "pcall(require, '" .. m .. "')"
-             or  "true, require('" .. m .. "')"
+   local function req(m: string, save_in: string): string
+      if gen_compat == "optional" then
+         return " local p, m = pcall(require, '" .. m .. "') if p then " .. save_in .. " = m end "
+      else
+         return " " .. save_in .. " = require('" .. m .. "') "
+      end
    end
 
    for _, name in ipairs(used_list) do
@@ -7320,7 +7322,7 @@ local function add_compat_entries(program: Node, used_set: {string: boolean}, ge
       elseif name == "table.pack" then
          load_code(name, [[local _tl_table_pack = table.pack or function(...) return { n = select("#", ...), ... } end]])
       elseif name == "bit32" then
-         load_code(name, "local bit32 = bit32; if not bit32 then local p, m = " .. req("bit32") .. "; if p then bit32 = m end end")
+         load_code(name, "local bit32 = bit32; if not bit32 then" .. req("bit32", "bit32") .. "end")
       elseif name == "mt" then
          load_code(name, "local _tl_mt = function(m, s, a, b) return (getmetatable(s == 1 and a or b)[m](a, b)) end")
       elseif name == "math.maxinteger" then
@@ -7331,10 +7333,11 @@ local function add_compat_entries(program: Node, used_set: {string: boolean}, ge
          load_code(name, "local type = type")
       else
          if not compat_loaded then
-            load_code("compat", "local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = " .. req("compat53.module") .. "; if p then _tl_compat = m end end")
+            load_code("compat", "local _tl_compat = {}; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then"
+               .. req("compat53.module", "_tl_compat") .. "end")
             compat_loaded = true
          end
-         load_code(name, (("local $NAME = _tl_compat and _tl_compat.$NAME or $NAME"):gsub("$NAME", name)))
+         load_code(name, (("local $NAME = _tl_compat.$NAME or $NAME"):gsub("$NAME", name)))
       end
    end
    program.y = 1
