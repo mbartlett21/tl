@@ -10553,8 +10553,7 @@ a.types[i], b.types[i]), }
          after = function(_, _node, children, ret)
             ret = ret or false
             for _, c in ipairs(children) do
-               local ca = c
-               if type(ca) == "boolean" then
+               if type(c) == "boolean" then
                   ret = ret or c
                end
             end
@@ -14591,7 +14590,7 @@ self:expand_type(node, values, elements) })
          })
          ifnode.if_blocks = { block }
 
-         local function add_assert(aexpr, errstr)
+         local function add_assert(aexpr, err)
             table.insert(stmts,
             node_at(nodetouse, {
                kind = "op",
@@ -14600,18 +14599,25 @@ self:expand_type(node, values, elements) })
                e2 = node_at(nodetouse, {
                   kind = "expression_list",
                   aexpr,
-                  node_at(nodetouse, {
-                     kind = "string",
-                     conststr = errstr,
-                     tk = string.format("%q", errstr),
-                  }),
+                  err,
                }),
             }))
 
          end
 
+         local function add_assert_fixstr(aexpr, errstr)
+            return add_assert(aexpr,
+            node_at(nodetouse, {
+               kind = "string",
+               conststr = errstr,
+               tk = string.format("%q", errstr),
+            }))
+
+         end
+
          local function add_simple_type_assert(aexpr, expected)
-            add_assert(
+            local errstr = "expected " .. name .. " to be a " .. expected .. ", was "
+            return add_assert(
             node_at(nodetouse, {
                kind = "op",
                op = an_operator(nodetouse, 2, "=="),
@@ -14630,14 +14636,31 @@ self:expand_type(node, values, elements) })
                   tk = "\"" .. expected .. "\"",
                }),
             }),
-            "expected " .. name .. " to be a " .. expected)
+            node_at(nodetouse, {
+               kind = "op",
+               op = an_operator(nodetouse, 2, ".."),
+               e1 = node_at(nodetouse, {
+                  kind = "string",
+                  conststr = errstr,
+                  tk = string.format("%q", errstr),
+               }),
+               e2 = node_at(nodetouse, {
+                  kind = "op",
+                  op = an_operator(nodetouse, 2, "@funcall"),
+                  e1 = node_at(nodetouse, { kind = "variable", tk = "type" }),
+                  e2 = node_at(nodetouse, {
+                     kind = "expression_list",
+                     aexpr,
+                  }),
+               }),
+            }))
 
          end
 
 
 
          if ty.typename == "nil" then
-            add_assert(
+            add_assert_fixstr(
             node_at(nodetouse, { kind = "boolean", tk = "false" }),
             "expected " .. name .. " to be nil")
 
@@ -14650,11 +14673,9 @@ self:expand_type(node, values, elements) })
          elseif ty.typename == "function" then
             add_simple_type_assert(expr, "function")
          elseif ty.fields then
-            local t = ty
-
-            if t.field_order[1] and not t.is_userdata then
-               for _, key in ipairs(t.field_order) do
-                  local subty = t.fields[key]
+            if ty.field_order[1] and not ty.is_userdata then
+               for _, key in ipairs(ty.field_order) do
+                  local subty = ty.fields[key]
                   local access = node_at(nodetouse, {
                      kind = "op",
                      op = an_operator(nodetouse, 2, "."),
@@ -14669,43 +14690,45 @@ self:expand_type(node, values, elements) })
                end
             end
          elseif ty.elements then
-            add_simple_type_assert(expr, "table")
+            if not (ty.fields and ty.is_userdata) then
+               add_simple_type_assert(expr, "table")
 
-            local substmts = node_at(nodetouse, {
-               kind = "statements",
-            })
-            local forloop = node_at(nodetouse, {
-               kind = "forin",
-               vars = node_at(nodetouse, {
-                  kind = "variable_list",
-                  node_at(nodetouse, { kind = "variable", tk = "_tl_index" }),
-                  node_at(nodetouse, { kind = "variable", tk = "_tl_value" }),
-               }),
-               exps = node_at(nodetouse, {
-                  kind = "expression_list",
-                  node_at(nodetouse, {
-                     kind = "op",
-                     op = an_operator(nodetouse, 2, "@funcall"),
-                     e1 = node_at(nodetouse, { kind = "variable", tk = "ipairs" }),
-                     e2 = node_at(nodetouse, {
-                        kind = "expression_list",
-                        expr,
+               local substmts = node_at(nodetouse, {
+                  kind = "statements",
+               })
+               local forloop = node_at(nodetouse, {
+                  kind = "forin",
+                  vars = node_at(nodetouse, {
+                     kind = "variable_list",
+                     node_at(nodetouse, { kind = "variable", tk = "_tl_index" }),
+                     node_at(nodetouse, { kind = "variable", tk = "_tl_value" }),
+                  }),
+                  exps = node_at(nodetouse, {
+                     kind = "expression_list",
+                     node_at(nodetouse, {
+                        kind = "op",
+                        op = an_operator(nodetouse, 2, "@funcall"),
+                        e1 = node_at(nodetouse, { kind = "variable", tk = "ipairs" }),
+                        e2 = node_at(nodetouse, {
+                           kind = "expression_list",
+                           expr,
+                        }),
                      }),
                   }),
-               }),
-               body = substmts,
-               yend = nodetouse.y,
-               xend = nodetouse.x,
-            })
+                  body = substmts,
+                  yend = nodetouse.y,
+                  xend = nodetouse.x,
+               })
 
-            local subty = ty.elements
+               local subty = ty.elements
 
 
-            local access = node_at(nodetouse, { kind = "identifier", tk = "_tl_value" })
-            local substmt = generate_type_verification(nodetouse, access, subty, name .. "[_]")
-            if substmt then
-               table.insert(substmts, substmt)
-
+               local access = node_at(nodetouse, { kind = "identifier", tk = "_tl_value" })
+               local substmt = generate_type_verification(nodetouse, access, subty, name .. "[_]")
+               if substmt then
+                  table.insert(substmts, substmt)
+                  table.insert(stmts, forloop)
+               end
             end
          end
 
