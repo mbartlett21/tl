@@ -14591,18 +14591,44 @@ do
          ifnode.if_blocks = {block}
 
          local function add_assert(aexpr: Node, err: Node)
-            table.insert(stmts,
+            local assertifnode = node_at(nodetouse, {
+               kind = "if",
+               yend = nodetouse.y,
+               xend = nodetouse.x,
+            })
+
+            -- it seems like we should accept false and nil and <type>
+            local notexpr = node_at(nodetouse, {
+               kind = "op",
+               op = an_operator(nodetouse, 1, "not"),
+               e1 = node_at(nodetouse, {
+                  kind = "paren",
+                  e1 = aexpr,
+               }),
+            })
+
+            local substmts = node_at(nodetouse, { kind = "statements" })
+
+            local errorblock = node_at(nodetouse, {
+               kind = "if_block",
+               if_parent = assertifnode,
+               if_block_n = 1,
+               exp = notexpr,
+               body = substmts,
+            })
+            assertifnode.if_blocks = {errorblock}
+            table.insert(substmts,
                node_at(nodetouse, {
                   kind = "op",
                   op = an_operator(nodetouse, 2, "@funcall"),
-                  e1 = node_at(nodetouse, { kind = "variable", tk = "assert" }),
+                  e1 = node_at(nodetouse, { kind = "variable", tk = "error" }),
                   e2 = node_at(nodetouse, {
                      kind = "expression_list",
-                     aexpr,
                      err
                   })
                })
             )
+            table.insert(stmts, assertifnode)
          end
 
          local function add_assert_fixstr(aexpr: Node, errstr: string)
