@@ -14714,51 +14714,52 @@ do
          end
       end
 
-      visit_node_verify.cbs = {
-         ["function"] = {
-            -- after = function(_self: nil, node: Node, children: {nil}): nil
-            -- end,
-         },
-         ["local_function"] = {
-            after = function(_self: nil, node: Node, _children: {nil}): nil
-               for _argi, argv in ipairs(node.args) do
-                  -- print(argv.y)
-                  -- print(argv.yend)
-                  -- for k, v in pairs(node as table) do print(k, v) end
-                  -- each argument has a argtype: Type
-                  -- print(_argi, argv.argtype)
-                  -- we want to prepend a verification on the start
-                  local ty = argv.argtype
-                  if ty is NominalType then
-                     ty = ty.resolved or ty
-                  end
-
-                  local nodetouse = argv
-
-                  local stmt = generate_type_verification(nodetouse, node_at(nodetouse, { kind = "variable", tk = argv.tk }), ty)
-
-                  if stmt then
-                     table.insert(node.body, 1, stmt)
-                  end
+      local functionvisit = {
+         after = function(_self: nil, node: Node, _children: {nil}): nil
+         -- print()
+         -- print(node)
+            -- for k, v in pairs(node as table) do print('>',k, v) end
+            -- for k, v in pairs(node.args as table) do print('>','>',k, v) end
+            for argi, argv in ipairs(node.args) do
+               -- print(argv.y)
+               -- print(argv.yend)
+               -- for k, v in pairs(node as table) do print(k, v) end
+               -- each argument has a argtype: Type
+               -- print(_argi, argv.argtype)
+               -- we want to prepend a verification on the start
+               if (node.is_method and argi == 1)
+                  or argv.tk == "..."
+                  then
+                  goto next
+               end
+               -- print(argi, argv, argv.kind)
+            -- for k, v in pairs(argv as table) do print('>','(argv)',k, v) end
+               -- if argv.y > 6400 then error''end
+               local ty = argv.argtype
+               if ty is NominalType then
+                  ty = ty.resolved or ty
                end
 
-               return nil
+               local nodetouse = argv
+
+               local stmt = generate_type_verification(nodetouse, node_at(nodetouse, { kind = "variable", tk = argv.tk }), ty)
+
+               if stmt then
+                  table.insert(node.body, 1, stmt)
+               end
+               ::next::
             end
-         }
+
+            return nil
+         end
       }
 
-      -- visit_node_verify.cbs["..."] = visit_node_verify.cbs["variable"]
-      -- visit_node_verify.cbs["argument_list"] = visit_node_verify.cbs["variable_list"]
-      -- visit_node_verify.cbs["expression_list"] = visit_node_verify.cbs["variable_list"]
-
-      -- visit_node_verify.after = function(_self: nil, _node: Node, _children: {Type}, _t: Type): Type
-      --    -- if node.expanded then
-      --    --    apply_macroexp(node)
-      --    -- end
-
-      --    -- print('test', node, t)
-      --    -- return t
-      -- end
+      visit_node_verify.cbs = {
+         ["function"] = functionvisit,
+         ["global_function"] = functionvisit,
+         ["record_function"] = functionvisit,
+         ["local_function"] = functionvisit,
+      }
    end
 
    local function add_type_verifications(_self: nil, program: Node)

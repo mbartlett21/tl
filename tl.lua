@@ -14714,51 +14714,52 @@ self:expand_type(node, values, elements) })
          end
       end
 
-      visit_node_verify.cbs = {
-         ["function"] = {},
-
-
-
-         ["local_function"] = {
-            after = function(_self, node, _children)
-               for _argi, argv in ipairs(node.args) do
+      local functionvisit = {
+         after = function(_self, node, _children)
 
 
 
 
+            for argi, argv in ipairs(node.args) do
 
 
-                  local ty = argv.argtype
-                  if ty.typename == "nominal" then
-                     ty = ty.resolved or ty
-                  end
 
-                  local nodetouse = argv
 
-                  local stmt = generate_type_verification(nodetouse, node_at(nodetouse, { kind = "variable", tk = argv.tk }), ty)
 
-                  if stmt then
-                     table.insert(node.body, 1, stmt)
-                  end
+
+               if (node.is_method and argi == 1) or
+                  argv.tk == "..." then
+
+                  goto next
                end
 
-               return nil
-            end,
-         },
+
+
+               local ty = argv.argtype
+               if ty.typename == "nominal" then
+                  ty = ty.resolved or ty
+               end
+
+               local nodetouse = argv
+
+               local stmt = generate_type_verification(nodetouse, node_at(nodetouse, { kind = "variable", tk = argv.tk }), ty)
+
+               if stmt then
+                  table.insert(node.body, 1, stmt)
+               end
+               ::next::
+            end
+
+            return nil
+         end,
       }
 
-
-
-
-
-
-
-
-
-
-
-
-
+      visit_node_verify.cbs = {
+         ["function"] = functionvisit,
+         ["global_function"] = functionvisit,
+         ["record_function"] = functionvisit,
+         ["local_function"] = functionvisit,
+      }
    end
 
    local function add_type_verifications(_self, program)
