@@ -921,6 +921,11 @@ do
 
 
 
+
+
+
+
+
    local last_token_kind = {
       ["start"] = nil,
       ["any"] = nil,
@@ -936,7 +941,12 @@ do
       ["got <"] = "op",
       ["got >"] = "op",
       ["got /"] = "op",
+      ["got //"] = "op",
       ["got :"] = "op",
+      ["got +"] = "op",
+      ["got *"] = "op",
+      ["got ^"] = "op",
+      ["got %"] = "op",
       ["got --["] = nil,
       ["string single"] = "$ERR$",
       ["string single got \\"] = "$ERR$",
@@ -993,6 +1003,10 @@ do
       [">"] = "got >",
       ["/"] = "got /",
       [":"] = "got :",
+      ["+"] = "got +",
+      ["*"] = "got *",
+      ["^"] = "got ^",
+      ["%"] = "got %",
       ["="] = "got =",
       ["~"] = "got ~",
       ["["] = "got [",
@@ -1312,13 +1326,19 @@ do
             if c == "-" then
                state = "got --"
             else
-               end_token("op", "-")
-               fwd = false
+               if c == "=" then
+                  end_token("op", "-=")
+               else
+                  end_token("op", "-")
+                  fwd = false
+               end
                state = "any"
             end
          elseif state == "got .." then
             if c == "." then
                end_token("...", "...")
+            elseif c == "=" then
+               end_token("op", "..=")
             else
                end_token("op", "..")
                fwd = false
@@ -1479,9 +1499,63 @@ do
          elseif state == "got /" then
             local t
             if c == "/" then
-               t = "//"
+               state = "got //"
             else
-               t = "/"
+               if c == "=" then
+                  t = "/="
+               else
+                  t = "/"
+                  fwd = false
+               end
+               end_token("op", t)
+               state = "any"
+            end
+         elseif state == "got //" then
+            local t
+            if c == "=" then
+               t = "//="
+            else
+               t = "//"
+               fwd = false
+            end
+            end_token("op", t)
+            state = "any"
+         elseif state == "got +" then
+            local t
+            if c == "=" then
+               t = "+="
+            else
+               t = "+"
+               fwd = false
+            end
+            end_token("op", t)
+            state = "any"
+         elseif state == "got *" then
+            local t
+            if c == "=" then
+               t = "*="
+            else
+               t = "*"
+               fwd = false
+            end
+            end_token("op", t)
+            state = "any"
+         elseif state == "got ^" then
+            local t
+            if c == "=" then
+               t = "^="
+            else
+               t = "^"
+               fwd = false
+            end
+            end_token("op", t)
+            state = "any"
+         elseif state == "got %" then
+            local t
+            if c == "=" then
+               t = "%="
+            else
+               t = "%"
                fwd = false
             end
             end_token("op", t)
@@ -4263,6 +4337,27 @@ do
          return i, node
       end
 
+      local assignops = {
+         ["="] = "",
+         ["+="] = "+",
+         ["-="] = "-",
+         ["*="] = "*",
+         ["/="] = "/",
+         ["//="] = "//",
+         ["^="] = "^",
+         ["%="] = "%",
+         ["..="] = "..",
+      }
+
+      local repeatable_expr = {
+         ["nil"] = true,
+         ["string"] = true,
+         ["number"] = true,
+         ["integer"] = true,
+         ["boolean"] = true,
+         ["identifier"] = true,
+      }
+
       parse_call_or_assignment = function(ps, i)
          local exp
          local istart = i
@@ -4290,12 +4385,52 @@ do
             end
          end
 
-         if ps.tokens[i].tk ~= "=" then
-            verify_tk(ps, i, "=")
-            return i
+         local op = assignops[ps.tokens[i].tk]
+
+         local eq = i
+
+         if asgn.vars[2] then
+            if ps.tokens[i].tk ~= "=" then
+               verify_tk(ps, i, "=")
+               return i
+            end
+         elseif not op then
+            return fail(ps, i, "syntax error, expected '=' or '[op]='")
          end
 
          i, asgn = parse_assignment_expression_list(ps, i, asgn)
+
+         if not asgn then return i end
+         if op ~= "" then
+
+            if not asgn.exps then return i, asgn end
+
+
+            local expr = asgn.exps[1]
+            local a = asgn.vars[1]
+
+            local exprop = {
+               f = ps.filename,
+               y = ps.tokens[eq].y,
+               x = ps.tokens[eq].x,
+               kind = "op",
+               op = an_operator(a, 2, op),
+               e1 = a,
+               e2 = expr,
+            }
+
+            asgn.exps[1] = exprop
+
+            if a.kind ~= "variable" then
+               local table_expr = a.e1
+               local key_expr = a.e2
+
+               if table_expr.kind ~= "variable" or not repeatable_expr[key_expr.kind] then
+
+                  return fail(ps, eq, "assignment too complex")
+               end
+            end
+         end
          return i, asgn
       end
    end
