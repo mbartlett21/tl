@@ -89,4 +89,32 @@ describe("assign", function()
       local map = { test = "test" }
       map.test = map.test .. "t"
    ]]))
+
+   pending("works with complex indices", util.gen([[
+      local map: {string:number} = { test = 3.2 }
+      local a = "te"
+      map[a .. "st"] /= 5
+   ]], [[
+      local map = { test = 3.2 }
+      local a = "te"
+      do local _tl_idx = a .. "st" map[_tl_idx] = map[_tl_idx] / 5 end
+   ]]))
+
+   pending("works with complex expressions and indices", util.gen([[
+      local map: {string:{string:number}} = { map = { test = 3.2 } }
+      local a = "te"
+      map.map[a .. "st"] /= 5
+   ]], [[
+      local map = { map = { test = 3.2 } }
+      local a = "te"
+      do local _tl_tbl = map.map local _tl_idx = a .. "st" _tl_tbl[_tl_idx] = _tl_tbl[_tl_idx] / 5 end
+   ]]))
+
+   pending("works with complex expressions", util.gen([[
+      local map: {string:{string:number}} = { map = { test = 3.2 } }
+      map.map.test /= 5
+   ]], [[
+      local map = { map = { test = 3.2 } }
+      do local _tl_tbl = map.map _tl_tbl.test = _tl_tbl.test / 5 end
+   ]]))
 end)
