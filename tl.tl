@@ -7269,6 +7269,16 @@ end
 
 local compat_code_cache: {string:Node} = {}
 
+local function assert_no_errors(errors: {Error}, msg: string)
+   if #errors ~= 0 then
+      local out = {}
+      for _, err in ipairs(errors) do
+         table.insert(out, err.y .. ":" .. err.x .. " " .. err.msg .. "\n")
+      end
+      error("Internal Compiler Error: " .. msg .. ":\n" .. table.concat(out), 2)
+   end
+end
+
 local function add_compat_entries(program: Node, used_set: {string: boolean}, gen_compat: GenCompat)
    if gen_compat == "off" or not next(used_set) then
       return
@@ -7285,8 +7295,11 @@ local function add_compat_entries(program: Node, used_set: {string: boolean}, ge
    local function load_code(name: string, text: string)
       local code: Node = compat_code_cache[name]
       if not code then
-         code = tl.parse(text, "@internal", "lua") as Node
-         tl.check(code, "@internal", { feat_lax = "off", gen_compat = "off" })
+         local syntax_errors: {Error}
+         local fname = "compat." .. name .. ".d.tl"
+         code, syntax_errors = tl.parse(text, fname, "lua") as (Node, {Error})
+         assert_no_errors(syntax_errors, "compatibility library contains syntax errors")
+         tl.check(code, fname, { feat_lax = "off", gen_compat = "off" })
          compat_code_cache[name] = code
       end
       for _, c in ipairs(code) do
@@ -7393,16 +7406,6 @@ end
 local stdlib_globals: {string:Variable} = nil
 local globals_typeid = new_typeid()
 local fresh_typevar_ctr = 1
-
-local function assert_no_errors(errors: {Error}, msg: string)
-   if #errors ~= 0 then
-      local out = {}
-      for _, err in ipairs(errors) do
-         table.insert(out, err.y .. ":" .. err.x .. " " .. err.msg .. "\n")
-      end
-      error("Internal Compiler Error: " .. msg .. ":\n" .. table.concat(out), 2)
-   end
-end
 
 local function resolve_for_special_function(t: Type): FunctionType
    if t is PolyType then
