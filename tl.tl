@@ -5845,9 +5845,8 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
                out.h = out.h + 1
             end
 
-            replaced = replaced:gsub("()\\z(%s*)", function(index_in_disguise: string|integer, ws: string): string
-               -- TODO: remove cast once bootstrap is updated
-               local index <const> = index_in_disguise as integer - 1
+            replaced = replaced:gsub("()\\z(%s*)", function(index: integer, ws: string): string
+               index = index - 1
                if replaced:sub(index, index) == "\\" then
                   return "\\z" .. ws
                end
@@ -5857,9 +5856,8 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
                return ""
             end)
 
-            replaced = replaced:gsub("()\\x(..)", function(index_in_disguise: string|integer, digits: string): string
-               -- TODO: remove cast once bootstrap is updated
-               local index <const> = index_in_disguise as integer - 1
+            replaced = replaced:gsub("()\\x(..)", function(index: integer, digits: string): string
+               index = index - 1
                if replaced:sub(index, index) == "\\" then
                   return "\\x" .. digits
                end
@@ -5867,9 +5865,8 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
                return byte and string.format("\\%03d", byte) or "\\x" .. digits
             end)
 
-            replaced = replaced:gsub("()\\u{(.-)}", function(index_in_disguise: string|integer, hex_digits: string): string
-               -- TODO: remove cast once bootstrap is updated
-               local index <const> = index_in_disguise as integer - 1
+            replaced = replaced:gsub("()\\u{(.-)}", function(index: integer, hex_digits: string): string
+               index = index - 1
                if replaced:sub(index, index) == "\\" then
                   return "\\u{" .. hex_digits .. "}"
                end
@@ -11539,8 +11536,7 @@ do
       local pos = 1
       local results: {Type} = {}
       while pos <= #pat do
-         -- TODO: remove once bootstrap
-         local endc = pat:match("%%[-+#0-9. ]*()", pos) as integer
+         local endc = pat:match("%%[-+#0-9. ]*()", pos)
          if not endc then return results end
          local c = pat:sub(endc, endc)
          if c == "" then
@@ -11573,8 +11569,7 @@ do
    end
 
    local function pack_string_skipnum(pos: integer, pat: string): integer
-      -- TODO: remove cast once bootstrap is updated
-      return pat:match("[0-9]*()", pos) as integer
+      return pat:match("[0-9]*()", pos)
    end
 
    local function parse_pack_string(node: Node, pat: string): {Type}, string

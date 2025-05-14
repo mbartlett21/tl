@@ -5845,9 +5845,8 @@ function tl.generate(ast, gen_target, opts)
                out.h = out.h + 1
             end
 
-            replaced = replaced:gsub("()\\z(%s*)", function(index_in_disguise, ws)
-
-               local index = index_in_disguise - 1
+            replaced = replaced:gsub("()\\z(%s*)", function(index, ws)
+               index = index - 1
                if replaced:sub(index, index) == "\\" then
                   return "\\z" .. ws
                end
@@ -5857,9 +5856,8 @@ function tl.generate(ast, gen_target, opts)
                return ""
             end)
 
-            replaced = replaced:gsub("()\\x(..)", function(index_in_disguise, digits)
-
-               local index = index_in_disguise - 1
+            replaced = replaced:gsub("()\\x(..)", function(index, digits)
+               index = index - 1
                if replaced:sub(index, index) == "\\" then
                   return "\\x" .. digits
                end
@@ -5867,9 +5865,8 @@ function tl.generate(ast, gen_target, opts)
                return byte and string.format("\\%03d", byte) or "\\x" .. digits
             end)
 
-            replaced = replaced:gsub("()\\u{(.-)}", function(index_in_disguise, hex_digits)
-
-               local index = index_in_disguise - 1
+            replaced = replaced:gsub("()\\u{(.-)}", function(index, hex_digits)
+               index = index - 1
                if replaced:sub(index, index) == "\\" then
                   return "\\u{" .. hex_digits .. "}"
                end
@@ -11539,7 +11536,6 @@ a.types[i], b.types[i]), }
       local pos = 1
       local results = {}
       while pos <= #pat do
-
          local endc = pat:match("%%[-+#0-9. ]*()", pos)
          if not endc then return results end
          local c = pat:sub(endc, endc)
@@ -11573,7 +11569,6 @@ a.types[i], b.types[i]), }
    end
 
    local function pack_string_skipnum(pos, pat)
-
       return pat:match("[0-9]*()", pos)
    end
 
