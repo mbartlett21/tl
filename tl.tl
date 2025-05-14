@@ -3484,7 +3484,15 @@ local function parse_variable_name(ps: ParseState, i: integer): integer, Node, i
       else
          fail(ps, i, "expected a variable annotation")
       end
-      i = verify_tk(ps, i, ">")
+
+      if ps.tokens[i].tk == ">=" then
+         -- split it up
+         -- (Lua doesn't accept this syntax, but it is nice to do so and add the
+         --  extra space when encoding to Lua)
+         ps.tokens[i].tk = "="
+      else
+         i = verify_tk(ps, i, ">")
+      end
    end
    return i, node
 end

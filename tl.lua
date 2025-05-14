@@ -3484,7 +3484,15 @@ do
          else
             fail(ps, i, "expected a variable annotation")
          end
-         i = verify_tk(ps, i, ">")
+
+         if ps.tokens[i].tk == ">=" then
+
+
+
+            ps.tokens[i].tk = "="
+         else
+            i = verify_tk(ps, i, ">")
+         end
       end
       return i, node
    end
