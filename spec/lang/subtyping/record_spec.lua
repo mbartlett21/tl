@@ -69,7 +69,7 @@ describe("records", function()
       end
    ]]))
 
-   pending("refines generic self on fields inherited from interfaces (regression test for #877)", util.check([[
+   it("refines generic self on fields inherited from interfaces (regression test for #877)", util.check([[
       -- Define an interface that uses self.
       -- Using self should automatically refine implementations to map self to the impl.
       local interface Container<T>

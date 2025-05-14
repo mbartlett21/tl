@@ -488,7 +488,7 @@ describe("generic function", function()
       { msg = "v" },
    }))
 
-   pending("check that 'any' matches any type variable", util.check([[
+   it("check that 'any' matches any type variable", util.check([[
       local function map<X, Y>(xs: {X}, f: function(X):Y): {Y}
          local rs = {}
          for i, v in ipairs(xs) do

@@ -46,8 +46,8 @@ describe("assignment to union", function()
       { y = 7, msg = 'in assignment: got number | string | boolean, expected number | string' },
    }))
 
-   pending("resolves union types in map keys", util.check([[
-      function foo(n: number | string, a: {string | boolean}):{(number | string):(string | boolean)}
+   it("resolves union types in map keys", util.check([[
+      local function foo(n: number | string, a: {string | boolean}):{(number | string):(string | boolean)}
          n = 12
          n = "hello"
          a[1] = "hello"

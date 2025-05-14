@@ -147,7 +147,7 @@ describe("metamethod __index", function()
    -- this is failing because the definition and implementations are not being cross-checked
    -- this causes the test to output an error on line 15, because the call doesn't match the
    -- metamethod definition inside Rec.
-   pending("record definition and implementations must match their types", util.check_type_error([[
+   it("record definition and implementations must match their types", util.check_type_error([[
       local type Rec = record
          x: number
          metamethod __index: function(Rec, number): string
@@ -164,7 +164,8 @@ describe("metamethod __index", function()
       r.x = 12
       print(r["!!!"])
    ]], {
-      { y = 7, msg = "in assignment: argument 2: got string, expected number" }
+      { y = 7, msg = "in record field: __index: argument 2: got string, expected number" },
+      { y = 15, msg = "argument 1: got string, expected number" },
    }))
 
    it("passes regression test for #680", util.check([[

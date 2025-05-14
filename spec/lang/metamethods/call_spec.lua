@@ -154,10 +154,10 @@ describe("metamethod __call", function()
    -- this is failing because the definition and implementations are not being cross-checked
    -- this causes the test to output an error on line 15, because the call doesn't match the
    -- metamethod definition inside Rec.
-   pending("record definition and implementations must match their types", util.check_type_error([[
+   it("record definition and implementations must match their types", util.check_type_error([[
       local type Rec = record
          x: number
-         metamethod __call: function(Rec, number, number): string
+         metamethod __call: function(Rec, number): string
       end
 
       local rec_mt: metatable<Rec> = {
@@ -171,7 +171,8 @@ describe("metamethod __call", function()
       r.x = 12
       print(r("!!!"))
    ]], {
-      { y = 7, msg = "in assignment: argument 2: got string, expected number" }
+      { y = 7, msg = "in record field: __call: argument 2: got string, expected number" },
+      { y = 15, msg = "argument 1: got string \"!!!\", expected number" },
    }))
 
    it("can resolve a __call type that uses a type alias (regression test for #605)", util.check([[
