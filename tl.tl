@@ -2506,9 +2506,13 @@ local node_mt: metatable<Node> = {
    end
 }
 
-local function new_node(ps: ParseState, i: integer, kind?: NodeKind): Node
+local function new_node(ps: ParseState, i: integer, kind?: NodeKind, fields ?: Node): Node
    local t = ps.tokens[i]
-   return setmetatable({ f = ps.filename, y = t.y, x = t.x, tk = t.tk, kind = kind or (t.kind as NodeKind) }, node_mt)
+   local node = { f = ps.filename, y = t.y, x = t.x, tk = t.tk, kind = kind or (t.kind as NodeKind) }
+   for k, v in pairs((fields as table) or {}) do
+      (node as table)[k] = v
+   end
+   return setmetatable(node, node_mt)
 end
 
 local function new_type(ps: ParseState, i: integer, typename: TypeName): Type
@@ -4182,11 +4186,98 @@ parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType): i
                return fail(ps, i, "syntax error: this syntax is no longer valid; use '" .. next_word .. " " .. v.tk .. "'")
             elseif next_word == "functiontype" then
                return fail(ps, i, "syntax error: this syntax is no longer valid; use 'type " .. v.tk .. " = function('...")
-            else
+            elseif ps.tokens[i + 1].kind ~= "string" then
                return fail(ps, i, "syntax error: this syntax is no longer valid; use 'type " .. v.tk .. " = '...")
+            else
+               -- we have a constant
+               local field_name = v.conststr or v.tk
+
+               -- use this as a constant
+               --
+               -- local record Simpler
+               --    ty = "Simple"
+               -- end
+               --==
+               -- local record Simpler
+               --    where self.ty == "Simple"
+               --    ty: UnreferencedEnum
+               --    enum UnreferencedEnum "Simple" end
+               -- end
+               local eqt = ps.tokens[i]
+               local eqi = i
+               i = i + 1
+               local value: Node
+               i, value = parse_literal(ps, i)
+               if not value.conststr then
+                  return fail(ps, i - 1, "expected a string literal")
+               end
+
+               local enumdef = new_first_order_type(ps, i - 1, "enum") as EnumType
+               enumdef.enumset = { [value.conststr] = true }
+
+               -- if we want it stored in the record
+               -- local enumdefdecl = new_typedecl(ps, i - 1, enumdef)
+               -- store_field_in_record(ps, iv, typename, enumdefdecl, def.fields, def.field_order)
+               -- local field_type = new_nominal(ps, i - 1, typename)
+               local field_type = enumdef
+
+               store_field_in_record(ps, iv, field_name, field_type, def.fields, def.field_order)
+
+               local where_macroexp = new_node(ps, eqi, "macroexp")
+
+               where_macroexp.is_method = true
+               where_macroexp.args = new_node(ps, eqi, "argument_list")
+               where_macroexp.args[1] = new_node(ps, eqi, "argument")
+               where_macroexp.args[1].tk = "self"
+               where_macroexp.args[1].argtype = new_type(ps, eqi, "self")
+               (where_macroexp.args[1].argtype as SelfType).display_type = def
+               where_macroexp.min_arity = 1
+               where_macroexp.rets = new_tuple(ps, eqi, { new_type(ps, eqi, "boolean") })
+               where_macroexp.exp = new_node(ps, eqi, "op", {
+                  op = { y = eqt.y, x = eqt.x, arity = 2, op = "==" },
+                  e1 = new_node(ps, eqi, "op", {
+                     op = { y = eqt.y, x = eqt.x, arity = 2, op = v.conststr and "@index" or "." },
+                     e1 = new_node(ps, eqi, "variable", { tk = "self" }),
+                     e2 = new_node(ps, eqi, v.conststr and "string" or "identifier", {
+                        tk = v.tk,
+                        conststr = v.conststr,
+                     }),
+                  }),
+                  e2 = value,
+               })
+               -- where_macroexp.exp = new_node(ps, eqi, "op")
+               -- where_macroexp.exp.op = { y = eqt.y, x = eqt.x, arity = 2, op = "==" }
+               -- where_macroexp.exp.e1 = new_node(ps, eqi, "op")
+               -- where_macroexp.exp.e1.op = { y = eqt.y, x = eqt.x, arity = 2, op = v.conststr and "@index" or "." }
+               -- where_macroexp.exp.e1.e1 = new_node(ps, eqi, "variable")
+               -- where_macroexp.exp.e1.e1.tk = "self"
+               -- where_macroexp.exp.e1.e2 = new_node(ps, eqi, v.conststr and "string" or "identifier")
+               -- where_macroexp.exp.e1.e2.tk = v.tk
+               -- where_macroexp.exp.e1.e2.conststr = v.conststr
+               -- where_macroexp.exp.e2 = value
+               end_at(where_macroexp, ps.tokens[i - 1])
+
+               local typ = new_type(ps, eqi, "function") as FunctionType
+               -- FIXME (b) GenericType do we need to patch the where-generated __is function into a generic? (see (a))
+               typ.is_method = true
+               typ.min_arity = 1
+               typ.args = new_tuple(ps, eqi, {
+                  a_self(where_macroexp, def)
+               })
+               typ.rets = new_tuple(ps, eqi, { new_type(ps, eqi, "boolean") })
+               typ.macroexp = where_macroexp
+
+               if not def.meta_fields then
+                  def.meta_fields = {}
+                  def.meta_field_order = {}
+               end
+               if def.meta_fields["__is"] then
+                  fail(ps, i, "only one constant field is allowed")
+               end
+               store_field_in_record(ps, eqi, "__is", typ, def.meta_fields, def.meta_field_order)
             end
          else
-            fail(ps, i, "syntax error: expected ':' for an attribute or '=' for a nested type")
+            fail(ps, i, "syntax error: expected ':' for an attribute or `=` for a constant")
          end
       end
    end
