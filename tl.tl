@@ -1703,6 +1703,7 @@ local enum SpecialFunctionName
    "xpcall"
    "rawget"
    "require"
+   "select"
    "string.find"
    "string.format"
    "string.gmatch"
@@ -7484,6 +7485,7 @@ tl.new_env = function(opts?: EnvOptions): Env, string
       set_special_function(stdlib_globals["xpcall"].t, "xpcall")
       set_special_function(stdlib_globals["rawget"].t, "rawget")
       set_special_function(stdlib_globals["require"].t, "require")
+      set_special_function(stdlib_globals["select"].t, "select")
 
       -- only global scope and vararg functions accept `...`:
       -- `@is_va` is an internal sentinel value which is
@@ -11733,6 +11735,38 @@ do
          self:apply_facts(node, node.e2[1].known)
          return r
       end,
+      ["select"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
+         -- if #b.tuple < 1 or #b.tuple > 3 then
+         --    return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects 2 or 3)")
+         -- end
+
+         -- local packstr = b.tuple[1]
+
+         -- local rets: TupleType
+
+         -- if packstr is StringType and packstr.literal then
+         --    local st = packstr.literal
+         --    local items, e = parse_pack_string(node, st)
+
+         --    if e then
+         --       if items then
+         --          -- just a warning
+         --          self.errs:add_warning("hint", packstr, e)
+         --       else
+         --          return self.errs:invalid_at(packstr, e)
+         --       end
+         --    end
+
+         --    table.insert(items, a_type(node, "integer", {}))
+
+         --    -- set the returns to match the response
+         --    rets = a_tuple(node, items)
+         -- end
+
+         -- TODO
+         return (self:type_check_function_call(node, a, b, argdelta, nil, nil))
+      end,
+
       ["string.pack"] = function(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
          if #b.tuple < 1 then
             return self.errs:invalid_at(node, "wrong number of arguments (given " .. #b.tuple .. ", expects at least 1)")
