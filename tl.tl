@@ -336,10 +336,15 @@ do
 
       char: function(integer...): string
       dump: function(function(any...): (any), ? boolean): string
+
+      -- @ { special_rets = { ty = "string.find", pattern = 2 } }
       find: function(string, string, ? integer, ? boolean): integer, integer, string... --[[special_function]]
+      -- @ { special_args = { ty = "string.format", formatstring = 1 } }
       format: function(string, any...): string --[[special_function]]
+      -- @ { special_rets = { ty = "string.gmatch", pattern = 2 } }
       gmatch: function(string, string, ? integer): (function(): string...) --[[special_function]]
 
+      -- @ { special_args = { ty = "string.gsub", pattern = 2, repl = 3 } }
       gsub: function(string, string, string, ? integer): string, integer --[[special_function]]
       gsub: function(string, string, {string:string|integer|number}, ? integer): string, integer --[[special_function]]
       gsub: function(string, string, {integer:string|integer|number}, ? integer): string, integer --[[special_function]]
@@ -347,12 +352,15 @@ do
 
       len: function(string): integer
       lower: function(string): string
+      -- @ { special_rets = { ty = "string.match", pattern = 2 } }
       match: function(string, string, ? integer): string... --[[special_function]]
+      -- @ { special_args = { ty = "string.pack", packstring = 1 } }
       pack: function(string, any...): string --[[special_function]]
       packsize: function(string): integer
       rep: function(string, integer, ? string): string
       reverse: function(string): string
       sub: function(string, integer, ? integer): string
+      -- @ { special_rets = { ty = "string.unpack", packstring = 1 } }
       unpack: function(string, string, ? integer): any... --[[special_function]]
       upper: function(string): string
    end
@@ -422,6 +430,7 @@ do
       type XpcallMsghFunction = function(...: any): ()
 
       arg: {string}
+      -- @ { special_args = { ty = "assert", arg = 1 }, special_rets = { ty = "returns_all" } }
       assert: function<A, B>(A, ? B, ...: any): A --[[special_function]]
 
       collectgarbage: function(? CollectGarbageCommand): number
@@ -433,6 +442,7 @@ do
 
       error: function(? any, ? integer)
       getmetatable: function<T>(T): metatable<T>
+      -- @ { special_args = { ty = "ipairs", arg = 1 } }
       ipairs: function<A>({A}): (function():(integer, A)) --[[special_function]]
 
       load: function((string | LoadFunction), ? string, ? LoadMode, ? table): (function, string)
@@ -443,11 +453,14 @@ do
       next: function<K, V>({K:V}, ? K): (K, V)
       next: function<A>({A}, ? integer): (integer, A)
 
+      -- @ { special_args = { ty = "pairs", arg = 1 } }
       pairs: function<K, V>({K:V}): (function():(K, V)) --[[special_function]]
+      -- @ { special_args = { ty = "pcall", arg = 1, params_start = 2 }, special_rets = { ty = "pcall", arg = 1, params_start = 2 } }
       pcall: function(function(any...):(any...), any...): boolean, any... --[[special_function]]
       print: function(any...)
       rawequal: function(any, any): boolean
 
+      -- @ { special_args = { ty = "rawget", arg = 1, key = 2 }, special_rets = { ty = "rawget", arg = 1, key = 2 } }
       rawget: function<K, V>({K:V}, K): V --[[special_function]]
       rawget: function({any:any}, any): any
       rawget: function(any, any): any
@@ -458,6 +471,7 @@ do
       rawset: function({any:any}, any, any): {any:any}
       rawset: function(any, any, any): any
 
+      -- @ { special_rets = { ty = "require", arg = 1 } }
       require: function(string): any --[[special_function]]
 
       select: function<T>(integer, T...): T...
@@ -472,6 +486,7 @@ do
       tostring: function(any): string
       type: function(any): string
       warn: function(string, string...)
+      -- @ { special_args = { ty = "pcall", arg = 1, params_start = 3 }, special_rets = { ty = "pcall", arg = 1, params_start = 3 } }
       xpcall: function(function(any...):(any...), XpcallMsghFunction, any...): boolean, any... --[[special_function]]
       _VERSION: string
    end
