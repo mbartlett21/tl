@@ -199,10 +199,15 @@ do
 
    global record io
       enum OpenMode
-         "r" "w" "a" "r+" "w+" "a+"
-         "rb" "wb" "ab" "r+b" "w+b" "a+b"
-         "*r" "*w" "*a" "*r+" "*w+" "*a+"
+          "r"   "w"   "a"   "r+"   "w+"   "a+"
+          "rb"  "wb"  "ab"  "r+b"  "w+b"  "a+b"
+         "*r"  "*w"  "*a"  "*r+"  "*w+"  "*a+"
          "*rb" "*wb" "*ab" "*r+b" "*w+b" "*a+b"
+      end
+
+      enum FileType
+         "file"
+         "closed file"
       end
 
       close: function(? FILE)
@@ -229,7 +234,7 @@ do
       stdin: FILE
       stdout: FILE
       tmpfile: function(): FILE
-      type: function(any): string
+      type: function(any): FileType
       write: function((string | number)...): FILE, string, integer
    end
 
