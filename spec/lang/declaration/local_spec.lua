@@ -118,6 +118,10 @@ describe("local", function()
          local x <const> = 1
       ]]))
 
+      it("accepts <const> annotation missing a space", util.check([[
+         local x <const>= 1
+      ]]))
+
       describe("<total>", function()
          it("fails without an init value", util.check_type_error([[
             local x <total>: {boolean:string}
