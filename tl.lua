@@ -242,11 +242,11 @@ do
       abs: function<N is Numeric>(N): N
       acos: function(number): number
       asin: function(number): number
-      atan: function(number, ? number): number
-      atan2: function(number, number): number
+      atan: function(number, ? number): number -- TODO: needs_compat (5.2-) (2-arguments only)
+      atan2: function(number, number): number -- TODO: needs_compat (5.3+) => math.atan
       ceil: function(number): integer
       cos: function(number): number
-      cosh: function(number): number
+      cosh: function(number): number -- TODO: needs_compat (5.3+)
       deg: function(number): number
       exp: function(number): number
       floor: function(number): integer
@@ -254,11 +254,11 @@ do
       fmod: function(integer, integer): integer
       fmod: function(number, number): number
 
-      frexp: function(number): number, integer
+      frexp: function(number): number, integer -- TODO: needs_compat (5.3+)
       huge: number
-      ldexp: function(number, integer): number
+      ldexp: function(number, integer): number -- TODO: needs_compat (5.3+) => x * 2.0^exp
       log: function(number, ? number): number
-      log10: function(number): number
+      log10: function(number): number -- TODO: needs_compat (5.2+) => math.log(_, 10)
 
       max: function(integer...): integer
       max: function((number | integer)...): number
@@ -276,7 +276,7 @@ do
 
       modf: function(number): integer, number
       pi: number
-      pow: function(number, number): number
+      pow: function(number, number): number -- TODO: needs_compat (5.3+) => a^b
       rad: function(number): number
 
       random: function(integer, ? integer): integer
@@ -284,10 +284,10 @@ do
 
       randomseed: function(? integer, ? integer): integer, integer
       sin: function(number): number
-      sinh: function(number): number
+      sinh: function(number): number -- TODO: needs_compat (5.3+)
       sqrt: function(number): number
       tan: function(number): number
-      tanh: function(number): number
+      tanh: function(number): number -- TODO: needs_compat (5.3+)
       tointeger: function(any): integer
       type: function(any): string
       ult: function(number, number): boolean
@@ -331,10 +331,10 @@ do
       cpath: string
       loaded: {string:any}
       loadlib: function(string, string): (function)
-      loaders: { function(string): ((function(): any), any) }
+      loaders: { function(string): ((function(): any), any) } -- TODO: needs_compat (5.2+) => package.searchers
       path: string
       preload: {any:any}
-      searchers: { function(string): ((function(): any), any) }
+      searchers: { function(string): ((function(): any), any) } -- TODO: needs_compat (5.1) => package.loaders
       searchpath: function(string, string, ? string, ? string): string, string
    end
 
