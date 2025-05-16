@@ -8964,6 +8964,16 @@ do
       return ok, errs
    end
 
+   function TypeChecker:eqtype_nominal(a, b)
+      local ra = a.typename == "nominal" and self:resolve_nominal(a) or a
+      local rb = b.typename == "nominal" and self:resolve_nominal(b) or b
+      local ok, errs = self:same_type(ra, rb)
+      if errs and #errs == 1 and errs[1].msg:match("^got ") then
+         return false
+      end
+      return ok, errs
+   end
+
    function TypeChecker:subtype_array(a, b)
       if (not a.elements) or (not self:is_a(a.elements, b.elements)) then
          return false
@@ -9263,6 +9273,7 @@ do
 
             return self:same_type(self:resolve_nominal(a), b.def)
          end,
+         ["*"] = TypeChecker.eqtype_nominal,
       },
       ["record"] = {
          ["record"] = TypeChecker.eqtype_record,
@@ -9330,6 +9341,7 @@ do
          ["typevar"] = function(self, a, b)
             return self:compare_or_infer_typevar(b.typevar, a, nil, self.same_type)
          end,
+         ["nominal"] = TypeChecker.eqtype_nominal,
       },
    }
 
