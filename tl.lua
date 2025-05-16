@@ -393,12 +393,12 @@ do
    end
 
    global record utf8
-      char: function(number...): string
+      char: function(integer...): string
       charpattern: string
-      codepoint: function(string, ? number, ? number, ? boolean): number...
-      codes: function(string, ? boolean): (function(string, ? number): (number, number))
-      len: function(string, ? number, ? number, ? boolean): number
-      offset: function(string, number, ? number): number
+      codepoint: function(string, ? integer, ? integer, ? boolean): integer...
+      codes: function(string, ? boolean): (function(string, ? integer): (integer, integer), string, integer)
+      len: function(string, ? integer, ? integer, ? boolean): integer, integer
+      offset: function(string, integer, ? integer): integer
    end
 
    local record StandardLibrary
