@@ -87,6 +87,7 @@ do
 
    global record FILE
       is userdata
+      -- where io.type(self)
 
       enum SeekWhence
          "set" "cur" "end"
@@ -244,11 +245,11 @@ do
       abs: function<N is Numeric>(N): N
       acos: function(number): number
       asin: function(number): number
-      atan: function(number, ? number): number
-      atan2: function(number, number): number
+      atan: function(number, ? number): number -- needs_compat (2-arguments)
+      atan2: function(number, number): number -- needs_compat (not in 5.3+) => math.atan
       ceil: function(number): integer
       cos: function(number): number
-      cosh: function(number): number
+      cosh: function(number): number -- needs_compat (not in 5.3+)
       deg: function(number): number
       exp: function(number): number
       floor: function(number): integer
@@ -256,11 +257,11 @@ do
       fmod: function(integer, integer): integer
       fmod: function(number, number): number
 
-      frexp: function(number): number, integer
+      frexp: function(number): number, integer -- needs_compat (not in 5.3+)
       huge: number
-      ldexp: function(number, integer): number
+      ldexp: function(number, integer): number -- needs_compat (not in 5.3+) => x * 2.0^exp
       log: function(number, ? number): number
-      log10: function(number): number
+      log10: function(number): number -- needs_compat (not in 5.2+) => math.log(_, 10)
 
       max: function(integer...): integer
       max: function((number | integer)...): number
@@ -278,7 +279,7 @@ do
 
       modf: function(number): integer, number
       pi: number
-      pow: function(number, number): number
+      pow: function(number, number): number -- needs_compat (not in 5.3+) => ^
       rad: function(number): number
 
       random: function(integer, ? integer): integer
@@ -286,10 +287,10 @@ do
 
       randomseed: function(? integer, ? integer): integer, integer
       sin: function(number): number
-      sinh: function(number): number
+      sinh: function(number): number -- needs_compat (not in 5.3+)
       sqrt: function(number): number
       tan: function(number): number
-      tanh: function(number): number
+      tanh: function(number): number -- needs_compat (not in 5.3+)
       tointeger: function(any): integer
       type: function(any): string
       ult: function(number, number): boolean
@@ -333,7 +334,7 @@ do
       cpath: string
       loaded: {string:any}
       loadlib: function(string, string): (function)
-      loaders: { function(name: string): ((function(): any), any) }
+      loaders: { function(name: string): ((function(): any), any) } -- needs_compat (not in 5.2+) => package.searchers
       path: string
       preload: {any:any}
       searchers: { function(name: string): ((function(): any), any) }
@@ -481,7 +482,8 @@ do
 
       tostring: function(any): string
       type: function(any): string
-      warn: function(string, string...)
+      -- warn: function(? any, ? integer) -- needs_compat
+      -- warn: function(string, string...)
       xpcall: function(function(any...):(any...), XpcallMsghFunction, any...): boolean, any... --[[special_function]]
       _VERSION: string
    end
@@ -491,6 +493,7 @@ do
    global collectgarbage <const> = StandardLibrary.collectgarbage
    global dofile <const> = StandardLibrary.dofile
    global error <const> = StandardLibrary.error
+   -- global warn <const> = StandardLibrary.warn
    global getmetatable <const> = StandardLibrary.getmetatable
    global load <const> = StandardLibrary.load
    global loadfile <const> = StandardLibrary.loadfile
