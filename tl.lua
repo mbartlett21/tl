@@ -172,8 +172,8 @@ do
 
       getmetatable: function<T>(T): metatable<T>
       getregistry: function(): {any:any}
-      getupvalue: function(AnyFunction, integer): any
-      getuservalue: function(userdata, integer): any
+      getupvalue: function(AnyFunction, integer): string, any
+      getuservalue: function(userdata, integer): any, boolean
 
       sethook: function(thread, HookFunction, string, ? integer)
       sethook: function(HookFunction, string, ? integer)
@@ -187,6 +187,7 @@ do
 
       traceback: function(thread, ? string, ? integer): string
       traceback: function(? string, ? integer): string
+      traceback: function(any): any
 
       upvalueid: function(AnyFunction, integer): userdata
       upvaluejoin: function(AnyFunction, integer, AnyFunction, integer)
@@ -424,7 +425,7 @@ do
          "b" "t" "bt"
       end
 
-      type XpcallMsghFunction = function(...: any): ()
+      type XpcallMsghFunction = function(any): any...
 
       arg: {string}
       assert: function<A, B>(A, ? B, ...: any): A --[[special_function]]
@@ -11362,7 +11363,7 @@ a.types[i], b.types[i]), }
          local msgh_type = a_function(arg2, {
             min_arity = self.feat_arity and 1 or 0,
             args = a_type(arg2, "tuple", { tuple = { a_type(arg2, "any", {}) } }),
-            rets = a_type(arg2, "tuple", { tuple = {} }),
+            rets = a_vararg(arg2, { a_type(arg2, "any", {}) }),
          })
          self:assert_is_a(arg2, msgh, msgh_type, "in message handler")
       end
