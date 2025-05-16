@@ -97,24 +97,24 @@ do
       end
 
       close: function(FILE): boolean, string, integer
-      flush: function(FILE)
+      flush: function(FILE): boolean, string, integer
 
       lines: function(FILE): (function(): (string))
       lines: function(FILE, FileNumberMode...): (function(): (number...))
-      lines: function(FILE, (number | FileStringMode)...): (function(): (string...))
-      lines: function(FILE, (number | FileMode)...): (function(): ((string | number)...))
-      lines: function(FILE, (number | string)...): (function(): (string...))
+      lines: function(FILE, (integer | FileStringMode)...): (function(): (string...))
+      lines: function(FILE, (integer | FileMode)...): (function(): ((string | number)...))
+      lines: function(FILE, (integer | string)...): (function(): (string...))
 
       read: function(FILE): string
       read: function(FILE, FileNumberMode...): number...
-      read: function(FILE, (number | FileStringMode)...): string...
-      read: function(FILE, (number | FileMode)...): ((string | number)...)
-      read: function(FILE, (number | string)...): (string...)
+      read: function(FILE, (integer | FileStringMode)...): string...
+      read: function(FILE, (integer | FileMode)...): ((string | number)...)
+      read: function(FILE, (integer | string)...): (string...)
 
-      seek: function(FILE, ? SeekWhence, ? integer): integer, string
-      setvbuf: function(FILE, SetVBufMode, ? integer)
+      seek: function(FILE, ? SeekWhence, ? integer): integer, string, integer
+      setvbuf: function(FILE, SetVBufMode, ? integer): boolean, string, integer
 
-      write: function(FILE, (string | number)...): FILE, string
+      write: function(FILE, (string | number)...): FILE, string, integer
 
       metamethod __close: function(FILE)
    end
@@ -200,15 +200,20 @@ do
          "*rb" "*wb" "*ab" "*r+b" "*w+b" "*a+b"
       end
 
+      enum FileType
+         "file"
+         "closed file"
+      end
+
       close: function(? FILE)
       input: function(? FILE | string): FILE
       flush: function()
 
-      lines: function(? string): (function(): (string))
-      lines: function(? string, FileNumberMode...): (function(): (number...))
-      lines: function(? string, (number | FileStringMode)...): (function(): (string...))
-      lines: function(? string, (number | FileMode)...): (function(): ((string | number)...))
-      lines: function(? string, (number | string)...): (function(): (string...))
+      lines: function(? string): (function(): (string), nil, nil, FILE)
+      lines: function(? string, FileNumberMode...): (function(): (number...), nil, nil, FILE)
+      lines: function(? string, (integer | FileStringMode)...): (function(): (string...), nil, nil, FILE)
+      lines: function(? string, (integer | FileMode)...): (function(): ((string | number)...), nil, nil, FILE)
+      lines: function(? string, (integer | string)...): (function(): (string...), nil, nil, FILE)
 
       open: function(string, ? OpenMode): FILE, string, integer
       output: function(? FILE | string): FILE
@@ -216,16 +221,16 @@ do
 
       read: function(): string
       read: function(FileNumberMode...): number...
-      read: function((number | FileStringMode)...): string...
-      read: function((number | FileMode)...): ((string | number)...)
-      read: function((number | string)...): (string...)
+      read: function((integer | FileStringMode)...): string...
+      read: function((integer | FileMode)...): ((string | number)...)
+      read: function((integer | string)...): (string...)
 
       stderr: FILE
       stdin: FILE
       stdout: FILE
       tmpfile: function(): FILE
-      type: function(any): string
-      write: function((string | number)...): FILE, string
+      type: function(any): FileType
+      write: function((string | number)...): FILE, string, integer
    end
 
    global record math
