@@ -87,6 +87,7 @@ do
 
    global record FILE
       is userdata
+      -- where io.type(self)
 
       enum SeekWhence
          "set" "cur" "end"
@@ -197,9 +198,9 @@ do
 
    global record io
       enum OpenMode
-         "r" "w" "a" "r+" "w+" "a+"
-         "rb" "wb" "ab" "r+b" "w+b" "a+b"
-         "*r" "*w" "*a" "*r+" "*w+" "*a+"
+          "r"   "w"   "a"   "r+"   "w+"   "a+"
+          "rb"  "wb"  "ab"  "r+b"  "w+b"  "a+b"
+         "*r"  "*w"  "*a"  "*r+"  "*w+"  "*a+"
          "*rb" "*wb" "*ab" "*r+b" "*w+b" "*a+b"
       end
 
