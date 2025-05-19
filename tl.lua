@@ -132,21 +132,21 @@ do
       getinfo: function(thread, AnyFunction | integer, ? string): GetInfoTable
       getinfo: function(        AnyFunction | integer, ? string): GetInfoTable
 
-      getlocal: function(thread, AnyFunction, integer): string
-      getlocal: function(thread, integer, integer): string, any
-      getlocal: function(AnyFunction, integer): string
-      getlocal: function(integer, integer): string, any
+      getlocal: function(thread, f: AnyFunction, name: integer): string
+      getlocal: function(thread, f: integer,     name: integer): string, any
+      getlocal: function(        f: AnyFunction, name: integer): string
+      getlocal: function(        f: integer,     name: integer): string, any
 
       getmetatable: function<T>(T): metatable<T>
       getregistry: function(): {any:any}
-      getupvalue: function(AnyFunction, integer): string, any
+      getupvalue: function(AnyFunction, up: integer): string, any
       getuservalue: function(userdata, ? integer): any, boolean
 
-      sethook: function(thread, HookFunction, string, ? integer)
-      sethook: function(HookFunction, string, ? integer)
+      sethook: function(thread, HookFunction, mask: string, count?: integer)
+      sethook: function(        HookFunction, mask: string, count?: integer)
 
-      setlocal: function(thread, integer, integer, any): string
-      setlocal: function(integer, integer, any): string
+      setlocal: function(thread, f: integer, name: integer, val: any): string
+      setlocal: function(        f: integer, name: integer, val: any): string
 
       setmetatable: function<T>(T, metatable<T>): T
       setupvalue: function(AnyFunction, integer, any): string
@@ -157,7 +157,7 @@ do
       traceback: function(any): any
 
       upvalueid: function(AnyFunction, integer): userdata
-      upvaluejoin: function(AnyFunction, integer, AnyFunction, integer)
+      upvaluejoin: function(f1: AnyFunction, n1: integer, f2: AnyFunction, n2: integer)
    end
 
    global record io
@@ -239,26 +239,26 @@ do
    global record math
       type Numeric = number | integer
 
-      abs: function<N is Numeric>(N): N
-      acos: function(number): number
-      asin: function(number): number
-      atan: function(number, ? number): number
-      atan2: function(number, number): number
-      ceil: function(number): integer
-      cos: function(number): number
-      cosh: function(number): number
-      deg: function(number): number
-      exp: function(number): number
+      abs:   function<N is Numeric>(N): N
+      acos:  function(number): number
+      asin:  function(number): number
+      atan:  function(y: number, x?: number): number
+      atan2: function(y: number,  x: number): number
+      ceil:  function(number): integer
+      cos:   function(number): number
+      cosh:  function(number): number
+      deg:   function(number): number
+      exp:   function(number): number
       floor: function(number): integer
 
-      fmod: function(integer, integer): integer
-      fmod: function(number, number): number
+      fmod:  function(integer, integer): integer
+      fmod:  function(number,  number): number
 
       frexp: function(number): number, integer
-      huge: number
-      ldexp: function(number, integer): number
-      log: function(number, ? number): number
-      log10: function(number): number
+      huge:  number
+      ldexp: function(m: number, e: integer): number
+      log:   function(x: number, base?: number): number
+      log10: function(x: number): number
 
       max: function(integer...): integer
       max: function((number | integer)...): number
@@ -276,17 +276,17 @@ do
 
       modf: function(number): integer, number
       pi: number
-      pow: function(number, number): number
+      pow: function(x: number, y: number): number
       rad: function(number): number
 
-      random: function(integer, ? integer): integer
+      random: function(m: integer, n?: integer): integer
       random: function(): number
 
       randomseed: function(? integer, ? integer): integer, integer
-      sin: function(number): number
+      sin:  function(number): number
       sinh: function(number): number
       sqrt: function(number): number
-      tan: function(number): number
+      tan:  function(number): number
       tanh: function(number): number
       tointeger: function(any): integer
       type: function(any): string
@@ -312,16 +312,16 @@ do
 
       clock: function(): number
 
-      date: function(DateMode, ? number): DateTable
-      date: function(? string, ? number): string
+      date: function(format: DateMode, time?: number): DateTable
+      date: function(format?: string,  time?: number): string
 
-      difftime: function(integer, integer): number
+      difftime: function(t2: integer, t1: integer): number
       execute: function(string): boolean, string, integer
-      exit: function(? (integer | boolean), ? boolean)
+      exit: function(code?: (integer | boolean), close?: boolean)
       getenv: function(string): string
       remove: function(string): boolean, string
-      rename: function(string, string): boolean, string
-      setlocale: function(string, ? string): string
+      rename: function(old: string, new: string): boolean, string
+      setlocale: function(locale: string, category?: string): string
       time: function(? DateTable): integer
       tmpname: function(): string
    end
@@ -330,12 +330,12 @@ do
       config: string
       cpath: string
       loaded: {string:any}
-      loadlib: function(string, string): (function)
+      loadlib: function(libname: string, funcname: string): (function)
       loaders: { (function(string): (function(? string, ? any): (any), any)) }
       path: string
       preload: {string : function(? string, ? any): (any) }
       searchers: { (function(string): (function(? string, ? any): (any), any)) }
-      searchpath: function(string, string, ? string, ? string): string, string
+      searchpath: function(name: string, path: string, sep?: string, rep?: string): string, string
    end
 
    global record string
@@ -343,25 +343,25 @@ do
       byte: function(string, integer, ? integer): integer...
 
       char: function(integer...): string
-      dump: function(function(any...): (any), ? boolean): string
-      find: function(string, string, ? integer, ? boolean): integer, integer, string... --[[special_function]]
+      dump: function(function(any...): (any), strip?: boolean): string
+      find: function(string, string, init?: integer, plain?: boolean): integer, integer, string... --[[special_function]]
       format: function(string, any...): string --[[special_function]]
-      gmatch: function(string, string, ? integer): (function(): string...) --[[special_function]]
+      gmatch: function(string, string, init?: integer): (function(): string...) --[[special_function]]
 
-      gsub: function(string, string, string, ? integer): string, integer --[[special_function]]
-      gsub: function(string, string, {string:string|integer|number}, ? integer): string, integer --[[special_function]]
-      gsub: function(string, string, {integer:string|integer|number}, ? integer): string, integer --[[special_function]]
-      gsub: function(string, string, function((string|integer)...): ((string|integer|number)...), ? integer): string, integer --[[special_function]]
+      gsub: function(string, string, string, n?: integer): string, integer --[[special_function]]
+      gsub: function(string, string, {string:string|integer|number}, n?: integer): string, integer --[[special_function]]
+      gsub: function(string, string, {integer:string|integer|number}, n?: integer): string, integer --[[special_function]]
+      gsub: function(string, string, function((string|integer)...): ((string|integer|number)...), n?: integer): string, integer --[[special_function]]
 
       len: function(string): integer
       lower: function(string): string
-      match: function(string, string, ? integer): string... --[[special_function]]
+      match: function(string, string, init?: integer): string... --[[special_function]]
       pack: function(string, any...): string --[[special_function]]
       packsize: function(string): integer
-      rep: function(string, integer, ? string): string
+      rep: function(string, integer, sep?: string): string
       reverse: function(string): string
       sub: function(string, integer, ? integer): string
-      unpack: function(string, string, ? integer): any... --[[special_function]]
+      unpack: function(string, string, pos?: integer): any... --[[special_function]]
       upper: function(string): string
    end
 
@@ -374,20 +374,20 @@ do
          n: integer
       end
 
-      concat: function({(string | number)}, ? string, ? integer, ? integer): string
+      concat: function({(string | number)}, sep?: string, i?: integer, j?: integer): string
 
-      insert: function<A>({A}, integer, A)
+      insert: function<A>({A}, pos: integer, A)
       insert: function<A>({A}, A)
 
-      move: function<A>({A}, integer, integer, integer, ? {A}): {A}
+      move: function<A>(from: {A}, from_start: integer, from_end: integer, to_start: integer, to?: {A}): {A}
 
       pack: function<T>(T...): PackTable<T> --[[needs_compat]]
       pack: function(any...): {any:any} --[[needs_compat]]
 
-      remove: function<A>({A}, ? integer): A
-      sort: function<A>({A}, ? SortFunction<A>)
+      remove: function<A>({A}, pos?: integer): A
+      sort: function<A>({A}, comp?: SortFunction<A>)
 
-      unpack: function<A>({A}, ? integer, ? integer): A... --[[needs_compat]]
+      unpack: function<A>({A}, i?: integer, j?: integer): A... --[[needs_compat]]
       unpack: function<A1, A2>({A1, A2}): A1, A2 --[[needs_compat]]
       unpack: function<A1, A2, A3>({A1, A2, A3}): A1, A2, A3 --[[needs_compat]]
       unpack: function<A1, A2, A3, A4>({A1, A2, A3, A4}): A1, A2, A3, A4 --[[needs_compat]]
@@ -397,10 +397,10 @@ do
    global record utf8
       char: function(integer...): string
       charpattern: string
-      codepoint: function(string, ? integer, ? integer, ? boolean): integer...
-      codes: function(string, ? boolean): (function(string, ? integer): (integer, integer), string, integer)
-      len: function(string, ? integer, ? integer, ? boolean): integer, integer
-      offset: function(string, integer, ? integer): integer
+      codepoint: function(string, ? integer, ? integer, lax?: boolean): integer...
+      codes: function(string, lax?: boolean): (function(string, ? integer): (integer, integer), string, integer)
+      len: function(string, ? integer, ? integer, lax?: boolean): integer, integer
+      offset: function(string, n: integer, i?: integer): integer
    end
 
    local record StandardLibrary
@@ -430,42 +430,42 @@ do
       type XpcallMsghFunction = function(any): any...
 
       arg: {string}
-      assert: function<A, B>(A, ? B, ...: any): A --[[special_function]]
+      assert: function<A, B>(v: A, message?: B, ...: any): A --[[special_function]]
 
       collectgarbage: function(? CollectGarbageCommand): number
-      collectgarbage: function(CollectGarbageSetValue, integer): number
-      collectgarbage: function(CollectGarbageIsRunning): boolean
-      collectgarbage: function(string, ? number): (boolean | number)
+      collectgarbage: function(opt: CollectGarbageSetValue, arg: integer): number
+      collectgarbage: function(opt: CollectGarbageIsRunning): boolean
+      collectgarbage: function(opt: string, arg?: number): (boolean | number)
 
       dofile: function(? string): any...
 
-      error: function(? any, ? integer)
+      error: function(message?: any, level?: integer)
       getmetatable: function<T>(T): metatable<T>
       ipairs: function<A>({A}): (function({A}, integer): (integer, A), {A}, integer) --[[special_function]]
 
-      load: function((string | LoadFunction), ? string, ? LoadMode, ? table): (function, string)
-      load: function((string | LoadFunction), ? string, ? string, ? table): (function, string)
+      load: function(chunk: (string | LoadFunction), chunkname?: string, mode?: LoadMode, env?: table): (function, string)
+      load: function(chunk: (string | LoadFunction), chunkname?: string, mode?: string,   env?: table): (function, string)
 
-      loadfile: function(? string, ? LoadMode, ? table): (function, string)
-      loadfile: function(? string, ? string,   ? table): (function, string)
+      loadfile: function(filename?: string, mode?: LoadMode, env?: table): (function, string)
+      loadfile: function(filename?: string, mode?: string,   env?: table): (function, string)
 
-      next: function<K, V>({K:V}, ? K): (K, V)
-      next: function<A>({A}, ? integer): (integer, A)
+      next: function<K, V>(table: {K:V}, index?: K):       (K,       V)
+      next: function<A>(   table: {A},   index?: integer): (integer, A)
 
       pairs: function<K, V>({K:V}): (function({K:V}, ? K):(K, V), {K:V}, K) --[[special_function]]
       pcall: function(function(any...):(any...), any...): boolean, any... --[[special_function]]
       print: function(any...)
       rawequal: function(any, any): boolean
 
-      rawget: function<K, V>({K:V}, K): V --[[special_function]]
-      rawget: function({any:any}, any): any
-      rawget: function(any, any): any
+      rawget: function<K, V>({K:V},     K):   V --[[special_function]]
+      rawget: function(      {any:any}, any): any
+      rawget: function(      any,       any): any
 
       rawlen: function<A>({A}): integer
 
-      rawset: function<K, V>({K:V}, K, V): {K:V}
-      rawset: function({any:any}, any, any): {any:any}
-      rawset: function(any, any, any): any
+      rawset: function<K, V>({K:V},     K,   V):   {K:V}
+      rawset: function(      {any:any}, any, any): {any:any}
+      rawset: function(      any,       any, any): any
 
       require: function(string): any --[[special_function]]
 
@@ -481,7 +481,7 @@ do
       tostring: function(any): string
       type: function(any): string
       warn: function(string, string...)
-      xpcall: function(function(any...):(any...), XpcallMsghFunction, any...): boolean, any... --[[special_function]]
+      xpcall: function(function(any...):(any...), msgh: XpcallMsghFunction, any...): boolean, any... --[[special_function]]
       _VERSION: string
    end
 
