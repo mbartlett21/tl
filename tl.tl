@@ -445,7 +445,8 @@ do
       load: function((string | LoadFunction), ? string, ? LoadMode, ? table): (function, string)
       load: function((string | LoadFunction), ? string, ? string, ? table): (function, string)
 
-      loadfile: function(? string, ? string, ? {any:any}): (function, string)
+      loadfile: function(? string, ? LoadMode, ? table): (function, string)
+      loadfile: function(? string, ? string,   ? table): (function, string)
 
       next: function<K, V>({K:V}, ? K): (K, V)
       next: function<A>({A}, ? integer): (integer, A)
