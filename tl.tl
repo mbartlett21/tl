@@ -385,7 +385,7 @@ do
       remove: function<A>({A}, ? integer): A
       sort: function<A>({A}, ? SortFunction<A>)
 
-      unpack: function<A>({A}, ? number, ? number): A... --[[needs_compat]]
+      unpack: function<A>({A}, ? integer, ? integer): A... --[[needs_compat]]
       unpack: function<A1, A2>({A1, A2}): A1, A2 --[[needs_compat]]
       unpack: function<A1, A2, A3>({A1, A2, A3}): A1, A2, A3 --[[needs_compat]]
       unpack: function<A1, A2, A3, A4>({A1, A2, A3, A4}): A1, A2, A3, A4 --[[needs_compat]]
