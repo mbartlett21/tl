@@ -90,7 +90,7 @@ do
 
       close: function(thread): boolean, string
       create: function(Function): thread
-      isyieldable: function(): boolean
+      isyieldable: function(? thread): boolean
       resume: function(thread, any...): boolean, any...
       running: function(): thread, boolean
       status: function(thread): string
