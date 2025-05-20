@@ -2452,10 +2452,10 @@ local parse_argument_list: function(ParseState, integer): integer, Node, integer
 local parse_argument_type_list: function(ParseState, integer): integer, TupleType, boolean, integer
 local parse_type: function(ParseState, integer): integer, FirstClassType, integer
 local parse_type_declaration: function(ps: ParseState, i: integer, node_name: NodeKind): integer, Node
-local parse_interface_name: function(ps: ParseState, i: integer): integer, Type, integer
+local parse_interface_name: function(ps: ParseState, i: integer): integer, NominalType, integer
 
 local type ParseBody = function(ps: ParseState, i: integer, def: Type): integer, boolean
-local parse_enum_body: function(ps: ParseState, i: integer, def: EnumType): integer, boolean
+local parse_enum_body: function(ps: ParseState, i: integer, def: Type): integer, boolean
 local parse_record_body: function(ps: ParseState, i: integer, def: Type): integer, boolean
 local parse_type_body_fns: {BodyTypeName:ParseBody}
 
@@ -3554,7 +3554,7 @@ local function parse_argument_type(ps: ParseState, i: integer): integer, Argumen
    return i, { i = i, type = typ, is_va = is_va, is_self = is_self, opt = (opt > 0) or is_va }, 0
 end
 
-parse_argument_type_list = function(ps: ParseState, i: integer): integer, Type, boolean, integer
+parse_argument_type_list = function(ps: ParseState, i: integer): integer, TupleType, boolean, integer
    local ars: {ArgumentInfo} = {}
    i = parse_bracket_list(ps, i, ars, "(", ")", "sep", parse_argument_type)
    local t, list = new_tuple(ps, i)
@@ -3886,7 +3886,8 @@ local function parse_nested_type(ps: ParseState, i: integer, def: RecordLikeType
    return i
 end
 
-parse_enum_body = function(ps: ParseState, i: integer, def: EnumType): integer, boolean
+parse_enum_body = function(ps: ParseState, i: integer, def: Type): integer, boolean
+   assert(def is EnumType)
    def.enumset = {}
    while ps.tokens[i].tk ~= "$EOF$" and ps.tokens[i].tk ~= "end" do
       local item: Node
@@ -3964,7 +3965,7 @@ local function parse_where_clause(ps: ParseState, i: integer, def: RecordLikeTyp
    return i, node
 end
 
-parse_interface_name = function(ps: ParseState, i: integer): integer, FirstOrderType, integer
+parse_interface_name = function(ps: ParseState, i: integer): integer, NominalType, integer
    local istart = i
    local typ: FirstOrderType
    i, typ = parse_simple_type_or_nominal(ps, i)
@@ -4018,7 +4019,8 @@ local function extract_userdata_from_interface_list(ps: ParseState, i: integer, 
    end
 end
 
-parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType): integer, boolean
+parse_record_body = function(ps: ParseState, i: integer, def: Type): integer, boolean
+   assert(def is RecordType or def is InterfaceType)
    def.fields = {}
    def.field_order = {}
 
@@ -4720,7 +4722,8 @@ end
 
 local recurse_type: function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): T
 
-local function aggregate_type_walker<S, T>(s: S, ast: AggregateType, visit: Visitor<S, TypeName, Type, T>): {T}
+local function aggregate_type_walker<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): {T}
+   assert(ast is AggregateType)
    local xs: {T} = {}
    for i, child in ipairs(ast.types) do
       xs[i] = recurse_type(s, child, visit)
@@ -4728,7 +4731,8 @@ local function aggregate_type_walker<S, T>(s: S, ast: AggregateType, visit: Visi
    return xs
 end
 
-local function record_like_type_walker<S, T>(s: S, ast: RecordLikeType, visit: Visitor<S, TypeName, Type, T>): {T}
+local function record_like_type_walker<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): {T}
+   assert(ast is RecordLikeType)
    local xs: {T} = {}
    if ast.interface_list then
       for _, child in ipairs(ast.interface_list) do
@@ -4774,7 +4778,8 @@ local type_walkers <total>: {TypeName: boolean | function<S, T>(s: S, ast: Type,
    ["none"] = false,
    ["*"] = false,
 
-   ["generic"] = function<S, T>(s: S, ast: GenericType, visit: Visitor<S, TypeName, Type, T>): {T}
+   ["generic"] = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): {T}
+      assert(ast is GenericType)
       local xs: {T} = {}
       for _, child in ipairs(ast.typeargs) do
          table.insert(xs, recurse_type(s, child, visit))
@@ -4782,7 +4787,8 @@ local type_walkers <total>: {TypeName: boolean | function<S, T>(s: S, ast: Type,
       table.insert(xs, recurse_type(s, ast.t, visit))
       return xs
    end,
-   ["tuple"] = function<S, T>(s: S, ast: TupleType, visit: Visitor<S, TypeName, Type, T>): {T}
+   ["tuple"] = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): {T}
+      assert(ast is TupleType)
       local xs: {T} = {}
       for i, child in ipairs(ast.tuple) do
          xs[i] = recurse_type(s, child, visit)
@@ -4792,7 +4798,8 @@ local type_walkers <total>: {TypeName: boolean | function<S, T>(s: S, ast: Type,
    ["union"] = aggregate_type_walker,
    ["tupletable"] = aggregate_type_walker,
    ["poly"] = aggregate_type_walker,
-   ["map"] = function<S, T>(s: S, ast: MapType, visit: Visitor<S, TypeName, Type, T>): {T}
+   ["map"] = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): {T}
+      assert(ast is MapType)
       return {
          recurse_type(s, ast.keys, visit),
          recurse_type(s, ast.values, visit),
@@ -4800,7 +4807,8 @@ local type_walkers <total>: {TypeName: boolean | function<S, T>(s: S, ast: Type,
    end,
    ["record"] = record_like_type_walker,
    ["interface"] = record_like_type_walker,
-   ["function"] = function<S, T>(s: S, ast: FunctionType, visit: Visitor<S, TypeName, Type, T>): {T}
+   ["function"] = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): {T}
+      assert(ast is FunctionType)
       local xs: {T} = {}
       if ast.args then
          for _, child in ipairs(ast.args.tuple) do
@@ -4814,7 +4822,8 @@ local type_walkers <total>: {TypeName: boolean | function<S, T>(s: S, ast: Type,
       end
       return xs
    end,
-   ["nominal"] = function<S, T>(s: S, ast: NominalType, visit: Visitor<S, TypeName, Type, T>): {T}
+   ["nominal"] = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): {T}
+      assert(ast is NominalType)
       local xs: {T} = {}
       if ast.typevals then
          for _, child in ipairs(ast.typevals) do
@@ -4823,23 +4832,27 @@ local type_walkers <total>: {TypeName: boolean | function<S, T>(s: S, ast: Type,
       end
       return xs
    end,
-   ["typearg"] = function<S, T>(s: S, ast: TypeArgType, visit: Visitor<S, TypeName, Type, T>): {T}
+   ["typearg"] = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): {T}
+      assert(ast is TypeArgType)
       return {
          ast.constraint and recurse_type(s, ast.constraint, visit)
       }
    end,
-   ["array"] = function<S, T>(s: S, ast: ArrayType, visit: Visitor<S, TypeName, Type, T>): {T}
+   ["array"] = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): {T}
+      assert(ast is ArrayType)
       return {
          recurse_type(s, ast.elements, visit)
       }
    end,
-   ["literal_table_item"] = function<S, T>(s: S, ast: LiteralTableItemType, visit: Visitor<S, TypeName, Type, T>): {T}
+   ["literal_table_item"] = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): {T}
+      assert(ast is LiteralTableItemType)
       return {
          recurse_type(s, ast.ktype, visit),
          recurse_type(s, ast.vtype, visit),
       }
    end,
-   ["typedecl"] = function<S, T>(s: S, ast: TypeDeclType, visit: Visitor<S, TypeName, Type, T>): {T}
+   ["typedecl"] = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): {T}
+      assert(ast is TypeDeclType)
       return {
          recurse_type(s, ast.def, visit)
       }
@@ -5119,7 +5132,8 @@ local function recurse_node<S, T>(s: S, root: tl.Node,
    end
    local visit_after = visit_node.after
 
-   recurse = function(ast: Node): T
+   recurse = function(ast: tl.Node): T
+      assert(ast is Node)
       local xs: {T} = {}
       local kind = assert(ast.kind)
       local kprint: string
@@ -6353,7 +6367,7 @@ end
 
 function tl.symbols_in_scope(tr: TypeReport, y: integer, x: integer, filename: string): {string:integer}
    local function find(symbols: {TypeReport.Symbol}, at_y: integer, at_x: integer): integer
-      local function le(a: {integer, integer}, b: {integer, integer}): boolean
+      local function le(a: TypeReport.Symbol, b: {integer, integer}): boolean
          return a[1] < b[1]
             or (a[1] == b[1] and a[2] <= b[2])
       end
@@ -7648,7 +7662,8 @@ do
    local map_type: function<S>(s: S, ty: Type, fns: TypeFunctionMap<S>): Type, {Error}
 
    local fresh_typevar_fns: TypeFunctionMap<{TypeArgType}> = {
-      ["typevar"] = function(typeargs: {TypeArgType}, t: TypeVarType, resolve: ResolveFunction): Type, boolean
+      ["typevar"] = function(typeargs: {TypeArgType}, t: Type, resolve: ResolveFunction): Type, boolean
+         assert(t is TypeVarType)
          for _, ta in ipairs(typeargs) do
             if ta.typearg == t.typevar then
                return a_type(t, "typevar", {
@@ -7659,7 +7674,8 @@ do
          end
          return t, false
       end,
-      ["typearg"] = function(typeargs: {TypeArgType}, t: TypeArgType, resolve: ResolveFunction): Type, boolean
+      ["typearg"] = function(typeargs: {TypeArgType}, t: Type, resolve: ResolveFunction): Type, boolean
+         assert(t is TypeArgType)
          for _, ta in ipairs(typeargs) do
             if ta.typearg == t.typearg then
                return a_type(t, "typearg", {
@@ -7922,7 +7938,8 @@ do
       end
 
       local resolve_typevar_fns: TypeFunctionMap<ResolveTypeVarState> = {
-         ["typevar"] = function(s: ResolveTypeVarState, t: TypeVarType): Type, boolean
+         ["typevar"] = function(s: ResolveTypeVarState, t: Type): Type, boolean
+            assert(t is TypeVarType)
             local rt = s.tc:find_var_type(t.typevar)
             if not rt then
                return t, false
@@ -7935,7 +7952,7 @@ do
          end,
       }
 
-      local function clear_resolved_typeargs(copy: GenericType, resolved: {string:Type}): Type
+      local function clear_resolved_typeargs(copy: GenericType, resolved: {string:Type}): FirstClassType
          for i = #copy.typeargs, 1, -1 do
             local r = resolved[copy.typeargs[i].typearg]
             if r then
@@ -7948,20 +7965,22 @@ do
          return copy
       end
 
-      resolve_typevars = function(self: TypeChecker, t: Type): Type, {Error}
+      resolve_typevars = function(self: TypeChecker, t: Type): FirstClassType, {Error}
          local state: ResolveTypeVarState = {
             tc = self,
             resolved = {},
          }
          local rt, errs = map_type(state, t, resolve_typevar_fns)
          if errs then
+            assert(rt is FirstOrderType or rt is GenericType)
             return rt, errs
          end
 
          if rt is GenericType then
-            rt = clear_resolved_typeargs(rt, state.resolved)
+            return clear_resolved_typeargs(rt, state.resolved)
          end
 
+         assert(rt is FirstOrderType, rt.typename)
          return rt
       end
    end
@@ -9186,12 +9205,15 @@ do
       return true
    end
 
-   local function compare_true_inferring_emptytable(self: TypeChecker, a: Type, b: EmptyTableType): boolean, {Error}
+   local function compare_true_inferring_emptytable(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+      assert(b is EmptyTableType)
       self:infer_emptytable(b, self:infer_at(b, a))
       return true
    end
 
-   local function compare_true_inferring_emptytable_if_not_userdata(self: TypeChecker, a: RecordLikeType, b: EmptyTableType): boolean, {Error}
+   local function compare_true_inferring_emptytable_if_not_userdata(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+      assert(a is RecordLikeType)
+      assert(b is EmptyTableType)
       if a.is_userdata then
          return false, { Err("{} cannot be used with userdata type %s", a) }
       end
@@ -9235,30 +9257,37 @@ do
       ["array"] = compare_true,
       ["map"] = compare_true,
       ["tupletable"] = compare_true,
-      ["interface"] = function(_self: TypeChecker, _a: Type, b: InterfaceType): boolean, {Error}
+      ["interface"] = function(_self: TypeChecker, _a: Type, b: Type): boolean, {Error}
+         assert(b is InterfaceType)
          return not b.is_userdata
       end,
-      ["record"] = function(_self: TypeChecker, _a: Type, b: RecordType): boolean, {Error}
+      ["record"] = function(_self: TypeChecker, _a: Type, b: Type): boolean, {Error}
+         assert(b is RecordType)
          return not b.is_userdata
       end,
    }
 
    TypeChecker.eqtype_relations = {
       ["typevar"] = {
-         ["typevar"] = function(self: TypeChecker, a: TypeVarType, b: TypeVarType): boolean, {Error}
+         ["typevar"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is TypeVarType)
+            assert(b is TypeVarType)
             if a.typevar == b.typevar then
                return true
             end
 
             return self:compare_or_infer_typevar(b.typevar, a, nil, self.same_type)
          end,
-         ["*"] = function(self: TypeChecker, a: TypeVarType, b: Type): boolean, {Error}
+         ["*"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is TypeVarType)
             return self:compare_or_infer_typevar(a.typevar, nil, b, self.same_type)
          end,
       },
       ["emptytable"] = emptytable_relations,
       ["tupletable"] = {
-         ["tupletable"] = function(self: TypeChecker, a: TupleTableType, b: TupleTableType): boolean, {Error}
+         ["tupletable"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is TupleTableType)
+            assert(b is TupleTableType)
             for i = 1, math.min(#a.types, #b.types) do
                if not self:same_type(a.types[i], b.types[i]) then
                   return false, { Err("in tuple entry " .. tostring(i) .. ": got %s, expected %s", a.types[i], b.types[i]) }
@@ -9272,42 +9301,54 @@ do
          ["emptytable"] = compare_true_inferring_emptytable,
       },
       ["array"] = {
-         ["array"] = function(self: TypeChecker, a: ArrayType, b: ArrayType): boolean, {Error}
+         ["array"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is ArrayType)
+            assert(b is ArrayType)
             return self:same_type(a.elements, b.elements)
          end,
          ["emptytable"] = compare_true_inferring_emptytable,
       },
       ["map"] = {
-         ["map"] = function(self: TypeChecker, a: MapType, b: MapType): boolean, {Error}
+         ["map"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is MapType)
+            assert(b is MapType)
             return compare_map(self, a.keys, b.keys, a.values, b.values, true)
          end,
          ["emptytable"] = compare_true_inferring_emptytable,
       },
       ["union"] = {
-         ["union"] = function(self: TypeChecker, a: UnionType, b: UnionType): boolean, {Error}
+         ["union"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is UnionType)
+            assert(b is UnionType)
             return (self:has_all_types_of(a.types, b.types)
                 and self:has_all_types_of(b.types, a.types))
          end,
       },
       ["nominal"] = {
-         ["nominal"] = TypeChecker.are_same_nominals,
-         ["typedecl"] = function(self: TypeChecker, a: NominalType, b: TypeDeclType): boolean, {Error}
+         ["nominal"] = TypeChecker.are_same_nominals as CompareTypes,
+         ["typedecl"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
             -- used when resolving type parameters
+            assert(a is NominalType)
+            assert(b is TypeDeclType)
             return self:same_type(self:resolve_nominal(a), b.def)
          end,
       },
       ["record"] = {
-         ["record"] = TypeChecker.eqtype_record,
+         ["record"] = TypeChecker.eqtype_record as CompareTypes,
          ["emptytable"] = compare_true_inferring_emptytable_if_not_userdata,
       },
       ["interface"] = {
-         ["interface"] = function(_self:TypeChecker, a: InterfaceType, b: InterfaceType): boolean, {Error}
+         ["interface"] = function(_self:TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is InterfaceType)
+            assert(b is InterfaceType)
             return a.typeid == b.typeid
          end,
          ["emptytable"] = compare_true_inferring_emptytable_if_not_userdata,
       },
       ["function"] = {
-         ["function"] = function(self:TypeChecker, a: FunctionType, b: FunctionType): boolean, {Error}
+         ["function"] = function(self:TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is FunctionType)
+            assert(b is FunctionType)
             local argdelta = a.is_method and 1 or 0
             local naargs, nbargs = #a.args.tuple, #b.args.tuple
             if naargs ~= nbargs then
@@ -9331,10 +9372,11 @@ do
          end,
       },
       ["self"] = {
-         ["self"] = function(_self: TypeChecker, _a: SelfType, _b: SelfType): boolean, {Error}
+         ["self"] = function(_self: TypeChecker, _a: Type, _b: Type): boolean, {Error}
             return true
          end,
-         ["*"] = function(self: TypeChecker, a: SelfType, b: Type): boolean, {Error}
+         ["*"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is SelfType)
             return self:same_type(self:type_of_self(a), b)
          end,
       },
@@ -9342,7 +9384,9 @@ do
          ["boolean"] = compare_true,
       },
       ["generic"] = {
-         ["generic"] = function(self: TypeChecker, a: GenericType, b: GenericType): boolean, {Error}
+         ["generic"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is GenericType)
+            assert(b is GenericType)
             if #a.typeargs ~= #b.typeargs then
                return false
             end
@@ -9356,10 +9400,12 @@ do
       },
       ["*"] = {
          ["boolean_context"] = compare_true,
-         ["self"] = function(self: TypeChecker, a: Type, b: SelfType): boolean, {Error}
+         ["self"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(b is SelfType)
             return self:same_type(a, (self:type_of_self(b)))
          end,
-         ["typevar"] = function(self: TypeChecker, a: Type, b: TypeVarType): boolean, {Error}
+         ["typevar"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(b is TypeVarType)
             return self:compare_or_infer_typevar(b.typevar, a, nil, self.same_type)
          end,
       },
@@ -9370,9 +9416,11 @@ do
          ["*"] = compare_true,
       },
       ["tuple"] = {
-         ["tuple"] = function(self: TypeChecker, a: TupleType, b: TupleType): boolean, {Error}  -- ∀ a[i] ∈ a, b[i] ∈ b. a[i] <: b[i]
-            local at, bt = a.tuple, b.tuple                                  -- ──────────────────────────────────
-            if #at ~= #bt then                                               --        a tuple <: b tuple
+         ["tuple"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}  -- ∀ a[i] ∈ a, b[i] ∈ b. a[i] <: b[i]
+            assert(a is TupleType)                                                     -- ──────────────────────────────────
+            assert(b is TupleType)                                                     --        a tuple <: b tuple
+            local at, bt = a.tuple, b.tuple
+            if #at ~= #bt then
                return false
             end
             for i = 1, #at do
@@ -9387,19 +9435,24 @@ do
          end,
       },
       ["typevar"] = {
-         ["typevar"] = function(self: TypeChecker, a: TypeVarType, b: TypeVarType): boolean, {Error}
+         ["typevar"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is TypeVarType)
+            assert(b is TypeVarType)
             if a.typevar == b.typevar then
                return true
             end
 
             return self:compare_or_infer_typevar(b.typevar, a, nil, self.is_a)
          end,
-         ["*"] = function(self: TypeChecker, a: TypeVarType, b: Type): boolean, {Error}
+         ["*"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is TypeVarType)
             return self:compare_or_infer_typevar(a.typevar, nil, b, self.is_a)
          end,
       },
       ["union"] = {
-         ["nominal"] = function(self: TypeChecker, a: UnionType, b: NominalType): boolean, {Error}
+         ["nominal"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is UnionType)
+            assert(b is NominalType)
             -- match unions structurally
             local rb = self:resolve_nominal(b)
             if rb is UnionType then
@@ -9408,9 +9461,11 @@ do
 
             return self:forall_are_subtype_of(a, b)
          end,
-         ["union"] = function(self: TypeChecker, a: UnionType, b: UnionType): boolean, {Error} -- ∀ t ∈ a. ∃ u ∈ b. t <: u
-            local used = {}                                                 -- ────────────────────────
-            for _, t in ipairs(a.types) do                                  --    a union <: b union
+         ["union"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error} -- ∀ t ∈ a. ∃ u ∈ b. t <: u
+            assert(a is UnionType)                                                   -- ────────────────────────
+            assert(b is UnionType)                                                   --    a union <: b union
+            local used = {}
+            for _, t in ipairs(a.types) do
                self:begin_scope()
                local u = self:exists_supertype_in(t, b)
                self:end_scope() -- don't preserve failed inferences
@@ -9429,15 +9484,19 @@ do
          ["*"] = TypeChecker.forall_are_subtype_of as CompareTypes,
       },
       ["poly"] = {
-         ["*"] = function(self: TypeChecker, a: PolyType, b: Type): boolean, {Error}    -- ∃ t ∈ a, t <: b
-            if self:exists_supertype_in(b, a) then                                      -- ───────────────
-               return true                                                              --   a poly <: b
+         ["*"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}    -- ∃ t ∈ a, t <: b
+            assert(a is PolyType)                                                   -- ───────────────
+                                                                                    --   a poly <: b
+            if self:exists_supertype_in(b, a) then
+               return true
             end
             return false, { Err("cannot match against any alternatives of the polymorphic type") }
          end,
       },
       ["nominal"] = {
-         ["nominal"] = function(self: TypeChecker, a: NominalType, b: NominalType): boolean, {Error}
+         ["nominal"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is NominalType)
+            assert(b is NominalType)
             local ok, errs = self:are_same_nominals(a, b)
             if ok then
                return true
@@ -9461,7 +9520,9 @@ do
             -- all other types nominally
             return ok, errs
          end,
-         ["union"] = function(self: TypeChecker, a: NominalType, b: UnionType): boolean, {Error}
+         ["union"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is NominalType)
+            assert(b is UnionType)
             -- match unions structurally
             local ra = self:resolve_nominal(a)
             if ra is UnionType then
@@ -9476,7 +9537,9 @@ do
          ["string"] = compare_true,
       },
       ["string"] = {
-         ["enum"] = function(_self: TypeChecker, a: StringType, b: EnumType): boolean, {Error}
+         ["enum"] = function(_self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is StringType)
+            assert(b is EnumType)
             if not a.literal then
                return false, { Err("%s is not a %s", a, b) }
             end
@@ -9492,13 +9555,15 @@ do
          ["number"] = compare_true,
       },
       ["interface"] = {
-         ["interface"] = function(self: TypeChecker, a: InterfaceType, b: InterfaceType): boolean, {Error}
+         ["interface"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is InterfaceType)
+            assert(b is InterfaceType)
             if self:in_interface_list(a, b) then
                return true
             end
             return self:same_type(a, b)
          end,
-         ["array"] = TypeChecker.subtype_array,
+         ["array"] = TypeChecker.subtype_array as CompareTypes,
          ["tupletable"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
             return self.subtype_relations["record"]["tupletable"](self, a, b)
          end,
@@ -9506,7 +9571,9 @@ do
       },
       ["emptytable"] = emptytable_relations,
       ["tupletable"] = {
-         ["tupletable"] = function(self: TypeChecker, a: TupleTableType, b: TupleTableType): boolean, {Error}
+         ["tupletable"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is TupleTableType)
+            assert(b is TupleTableType)
             for i = 1, math.min(#a.types, #b.types) do
                if not self:is_a(a.types[i], b.types[i]) then
                   return false, { Err("in tuple entry "
@@ -9519,12 +9586,15 @@ do
             end
             return true
          end,
-         ["record"] = function(self: TypeChecker, a: Type, b: RecordType): boolean, {Error}
+         ["record"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(b is RecordType)
             if b.elements then
                return self.subtype_relations["tupletable"]["array"](self, a, b)
             end
          end,
-         ["array"] = function(self: TypeChecker, a: TupleTableType, b: ArrayType): boolean, {Error}
+         ["array"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is TupleTableType)
+            assert(b is ArrayType)
             if b.inferred_len and b.inferred_len > #a.types then
                return false, { Err("incompatible length, expected maximum length of " .. tostring(#a.types) .. ", got " .. tostring(b.inferred_len)) }
             end
@@ -9537,7 +9607,9 @@ do
             end
             return true
          end,
-         ["map"] = function(self: TypeChecker, a: TupleTableType, b: MapType): boolean, {Error}
+         ["map"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is TupleTableType)
+            assert(b is MapType)
             local aa = self:arraytype_from_tuple(a.inferred_at or a, a)
             if not aa then
                return false, { Err("Unable to convert tuple %s to map", a) }
@@ -9548,8 +9620,10 @@ do
          ["emptytable"] = compare_true_inferring_emptytable,
       },
       ["record"] = {
-         ["record"] = TypeChecker.subtype_record,
-         ["interface"] = function(self: TypeChecker, a: RecordType, b: InterfaceType): boolean, {Error}
+         ["record"] = TypeChecker.subtype_record as CompareTypes,
+         ["interface"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is RecordType)
+            assert(b is InterfaceType)
             if self:in_interface_list(a, b) then
                return true
             end
@@ -9558,8 +9632,10 @@ do
                return self:subtype_record(a, b)
             end
          end,
-         ["array"] = TypeChecker.subtype_array,
-         ["map"] = function(self: TypeChecker, a: RecordType, b: MapType): boolean, {Error}
+         ["array"] = TypeChecker.subtype_array as CompareTypes,
+         ["map"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is RecordType)
+            assert(b is MapType)
             if not self:is_a(b.keys, a_type(b, "string", {})) then
                return false, { Err("can't match a record to a map with non-string keys") }
             end
@@ -9576,7 +9652,8 @@ do
 
             return true
          end,
-         ["tupletable"] = function(self: TypeChecker, a: RecordType, b: Type): boolean, {Error}
+         ["tupletable"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is RecordType)
             if a.elements then
                return self.subtype_relations["array"]["tupletable"](self, a, b)
             end
@@ -9584,16 +9661,22 @@ do
          ["emptytable"] = compare_true_inferring_emptytable_if_not_userdata,
       },
       ["array"] = {
-         ["array"] = TypeChecker.subtype_array,
-         ["record"] = function(self: TypeChecker, a: ArrayType, b: RecordType): boolean, {Error}
+         ["array"] = TypeChecker.subtype_array as CompareTypes,
+         ["record"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is ArrayType)
+            assert(b is RecordType)
             if b.elements then
                return self:subtype_array(a, b)
             end
          end,
-         ["map"] = function(self: TypeChecker, a: ArrayType, b: MapType): boolean, {Error}
+         ["map"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is ArrayType)
+            assert(b is MapType)
             return compare_map(self, a_type(a, "integer", {}), b.keys, a.elements, b.values)
          end,
-         ["tupletable"] = function(self: TypeChecker, a: ArrayType, b: TupleTableType): boolean, {Error}
+         ["tupletable"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is ArrayType)
+            assert(b is TupleTableType)
             local alen = a.inferred_len or 0
             if alen > #b.types then
                return false, { Err("incompatible length, expected maximum length of " .. tostring(#b.types) .. ", got " .. tostring(alen)) }
@@ -9611,21 +9694,28 @@ do
          ["emptytable"] = compare_true_inferring_emptytable,
       },
       ["map"] = {
-         ["map"] = function(self: TypeChecker, a: MapType, b: MapType): boolean, {Error}
+         ["map"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is MapType)
+            assert(b is MapType)
             return compare_map(self, a.keys, b.keys, a.values, b.values)
          end,
-         ["array"] = function(self: TypeChecker, a: MapType, b: ArrayType): boolean, {Error}
+         ["array"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is MapType)
+            assert(b is ArrayType)
             return compare_map(self, a.keys, a_type(b, "integer", {}), a.values, b.elements)
          end,
          ["emptytable"] = compare_true_inferring_emptytable,
       },
       ["typedecl"] = {
-         ["*"] = function(self: TypeChecker, a: TypeDeclType, b: RecordType): boolean, {Error}
+         ["*"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is TypeDeclType)
             return self:is_a(a.def, b)
          end,
       },
       ["function"] = {
-         ["function"] = function(self: TypeChecker, a: FunctionType, b: FunctionType): boolean, {Error}
+         ["function"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is FunctionType)
+            assert(b is FunctionType)
             local errs = {}
 
             local aa, ba = a.args.tuple, b.args.tuple
@@ -9659,18 +9749,22 @@ do
          end,
       },
       ["self"] = {
-         ["self"] = function(_self: TypeChecker, _a: SelfType, _b: SelfType): boolean, {Error}
+         ["self"] = function(_self: TypeChecker, _a: Type, _b: Type): boolean, {Error}
             return true
          end,
-         ["*"] = function(self: TypeChecker, a: SelfType, b: Type): boolean, {Error}
+         ["*"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is SelfType)
             return self:is_a(self:type_of_self(a), b)
          end,
       },
       ["typearg"] = {
-         ["typearg"] = function(_self: TypeChecker, a: TypeArgType, b: TypeArgType): boolean, {Error}
+         ["typearg"] = function(_self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is TypeArgType)
+            assert(b is TypeArgType)
             return a.typearg == b.typearg
          end,
-         ["*"] = function(self: TypeChecker, a: TypeArgType, b: Type): boolean, {Error}
+         ["*"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is TypeArgType)
             if a.constraint then
                return self:is_a(a.constraint, b)
             end
@@ -9680,7 +9774,8 @@ do
          ["boolean"] = compare_true,
       },
       ["generic"] = {
-         ["*"] = function(self: TypeChecker, a: GenericType, b: Type): boolean, {Error}
+         ["*"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(a is GenericType)
             -- TODO check if commenting this out causes variable leaks anywhere
             -- self:begin_scope()
             local aa = self:apply_generic(a, a)
@@ -9692,14 +9787,16 @@ do
       ["*"] = {
          ["any"] = compare_true,
          ["boolean_context"] = compare_true,
-         ["emptytable"] = function(_self: TypeChecker, a: Type, _b: EmptyTableType): boolean, {Error}
+         ["emptytable"] = function(_self: TypeChecker, a: Type, _b: Type): boolean, {Error}
             return false, { Err("assigning %s to a variable declared with {}", a) }
          end,
-         ["unresolved_emptytable_value"] = function(self: TypeChecker, a: Type, b: UnresolvedEmptyTableValueType): boolean, {Error}
+         ["unresolved_emptytable_value"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(b is UnresolvedEmptyTableValueType)
             infer_emptytable_from_unresolved_value(self, b, b, a)
             return true
          end,
-         ["generic"] = function(self: TypeChecker, a: Type, b: GenericType): boolean, {Error}
+         ["generic"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(b is GenericType)
             -- TODO check if commenting this out causes variable leaks anywhere
             -- self:begin_scope()
             local bb = self:apply_generic(b, b)
@@ -9707,19 +9804,24 @@ do
             -- self:end_scope()
             return ok, errs
          end,
-         ["self"] = function(self: TypeChecker, a: Type, b: SelfType): boolean, {Error}
+         ["self"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(b is SelfType)
             return self:is_a(a, (self:type_of_self(b)))
          end,
          ["tuple"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(b is TupleType)
             return self:is_a(a_tuple(a, {a}), b)
          end,
-         ["typedecl"] = function(self: TypeChecker, a: Type, b: TypeDeclType): boolean, {Error}
+         ["typedecl"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(b is TypeDeclType)
             return self:is_a(a, b.def)
          end,
-         ["typevar"] = function(self: TypeChecker, a: Type, b: TypeVarType): boolean, {Error}
+         ["typevar"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(b is TypeVarType)
             return self:compare_or_infer_typevar(b.typevar, a, nil, self.is_a)
          end,
-         ["typearg"] = function(self: TypeChecker, a: Type, b: TypeArgType): boolean, {Error}
+         ["typearg"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error}
+            assert(b is TypeArgType)
             if b.constraint then
                return self:is_a(a, b.constraint)
             end
@@ -9728,9 +9830,11 @@ do
                                                                                         -- ───────────────
                                                                                         --  a <: b union
          ["nominal"] = TypeChecker.subtype_nominal,
-         ["poly"] = function(self: TypeChecker, a: Type, b: PolyType): boolean, {Error} -- ∀ t ∈ b, a <: t
-            for _, t in ipairs(b.types) do                                              -- ───────────────
-               if not self:is_a(a, t) then                                              --   a <: b poly
+         ["poly"] = function(self: TypeChecker, a: Type, b: Type): boolean, {Error} -- ∀ t ∈ b, a <: t
+                                                                                    -- ───────────────
+            assert(b is PolyType)                                                   --   a <: b poly
+            for _, t in ipairs(b.types) do
+               if not self:is_a(a, t) then
                   return false, { Err("cannot match against all alternatives of the polymorphic type") }
                end
             end
@@ -10662,7 +10766,7 @@ do
       self:end_scope(node)
    end
 
-   local function flat_tuple(w: Where, vt: {FirstClassType | TupleType}): TupleType
+   local function flat_tuple(w: Where, vt: {Type}): TupleType
       local n_vals = #vt
       local ret = a_tuple(w, {})
       local rt = ret.tuple
@@ -11366,7 +11470,8 @@ do
       end
    end
 
-   local function special_pcall_xpcall(self: TypeChecker, node: Node, a: FunctionType, b: TupleType, argdelta?: integer): Type
+   local function special_pcall_xpcall(self: TypeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidType | TupleType
+      assert(a is FunctionType)
       local isx = a.special_function_handler == "xpcall"
       local base_nargs = isx and 2 or 1
       local bool = a_type(node, "boolean", {})
@@ -13008,7 +13113,7 @@ do
          end,
       },
       ["variable_list"] = {
-         after = function(self: TypeChecker, node: Node, children: {FirstClassType | TupleType}): Type
+         after = function(self: TypeChecker, node: Node, children: {Type}): Type
             local tuple = flat_tuple(node, children)
 
             for i, t in ipairs(tuple.tuple) do
@@ -13063,7 +13168,8 @@ do
                end
             end
          end,
-         after = function(self: TypeChecker, node: Node, children: {LiteralTableItemType}): Type
+         after = function(self: TypeChecker, node: Node, children_: {Type}): Type
+            local children = children_ as {LiteralTableItemType}
             node.known = FACT_TRUTHY
 
             if not node.expected then
@@ -14170,7 +14276,7 @@ do
 
       if (resolve_interface and checktype is InterfaceType) or checktype is RecordType then
          return map_type(self, t, {
-            ["self"] = function(_: TypeChecker, typ: SelfType): Type, boolean
+            ["self"] = function(_: TypeChecker, typ: Type): Type, boolean
                return typedecl_to_nominal(typ, checktype.declname, selfdecl)
             end,
          })
@@ -14254,7 +14360,7 @@ do
       end
    end
 
-   function TypeChecker:begin_temporary_record_types(typ: RecordType)
+   function TypeChecker:begin_temporary_record_types(typ: RecordLikeType)
       self:add_var(nil, "@self", a_typedecl(typ, typ))
 
       for fname, ftype in fields_of(typ) do
@@ -14269,7 +14375,7 @@ do
       end
    end
 
-   function TypeChecker:end_temporary_record_types(typ: RecordType)
+   function TypeChecker:end_temporary_record_types(typ: RecordLikeType)
       -- drop @self and nested records from scope
       -- to avoid closing them prematurely in end_scope()
       local scope = self.st[#self.st]
@@ -14331,17 +14437,19 @@ do
    visit_type = {
       cbs = {
          ["generic"] = {
-            before = function(self: TypeChecker, typ: GenericType)
+            before = function(self: TypeChecker, typ: Type)
                self:begin_scope()
                self:add_var(nil, "@generic", typ)
             end,
-            after = function(self: TypeChecker, typ: GenericType, _children: {Type}): Type
+            after = function(self: TypeChecker, typ: Type, _children: {Type}): Type
+               assert(typ is GenericType)
                self:end_scope()
                return fresh_typeargs(self, typ)
             end,
          },
          ["function"] = {
-            after = function(self: TypeChecker, typ: FunctionType, _children: {Type}): Type
+            after = function(self: TypeChecker, typ: Type, _children: {Type}): Type
+               assert(typ is FunctionType)
                if self.feat_arity == false then
                   typ.min_arity = 0
                end
@@ -14349,11 +14457,13 @@ do
             end
          },
          ["record"] = {
-            before = function(self: TypeChecker, typ: RecordType)
+            before = function(self: TypeChecker, typ: Type)
+               assert(typ is RecordLikeType)
                self:begin_scope()
                self:begin_temporary_record_types(typ)
             end,
-            after = function(self: TypeChecker, typ: RecordType, children: {Type}): Type
+            after = function(self: TypeChecker, typ: Type, children: {Type}): Type
+               assert(typ is RecordLikeType)
                local i = 1
                if typ.interface_list then
                   for j, _ in ipairs(typ.interface_list) do
@@ -14446,7 +14556,8 @@ do
             end,
          },
          ["typearg"] = {
-            after = function(self: TypeChecker, typ: TypeArgType, _children: {Type}): Type
+            after = function(self: TypeChecker, typ: Type, _children: {Type}): Type
+               assert(typ is TypeArgType)
                local name = typ.typearg
                local old <const> = self:find_var(name, "check_only")
                if old then
@@ -14464,7 +14575,8 @@ do
             end,
          },
          ["typevar"] = {
-            after = function(self: TypeChecker, typ: TypeVarType, _children: {Type}): Type
+            after = function(self: TypeChecker, typ: Type, _children: {Type}): Type
+               assert(typ is TypeVarType)
                if not self:find_var_type(typ.typevar) then
                   self.errs:add(typ, "undefined type variable " .. typ.typevar)
                end
@@ -14472,7 +14584,8 @@ do
             end,
          },
          ["nominal"] = {
-            after = function(self: TypeChecker, typ: NominalType, _children: {Type}): Type
+            after = function(self: TypeChecker, typ: Type, _children: {Type}): Type
+               assert(typ is NominalType)
                if typ.found then
                   return typ
                end
@@ -14508,7 +14621,8 @@ do
             end,
          },
          ["union"] = {
-            after = function(self: TypeChecker, typ: UnionType, _children: {Type}): Type
+            after = function(self: TypeChecker, typ: Type, _children: {Type}): Type
+               assert(typ is UnionType)
                local _, err = is_valid_union(typ)
                if err then
                   return self.errs:invalid_at(typ, err, typ)
@@ -14618,7 +14732,8 @@ do
       end
    end
 
-   tl.check = function(ast: Node, filename?: string, opts?: CheckOptions, env?: Env): Result, string
+   tl.check = function(ast_: tl.Node, filename?: string, opts?: CheckOptions, env?: Env): Result, string
+      local ast = ast_ as Node
       filename = filename or "?"
 
       opts = opts or {}
@@ -15020,7 +15135,7 @@ tl.init_env = function(lax?: boolean, gen_compat?: boolean | GenCompat, gen_targ
    return tl.new_env(opts)
 end
 
-tl.type_check = function(ast: Node, tc_opts?: tl.TypeCheckOptions): Result, string
+tl.type_check = function(ast: tl.Node, tc_opts?: tl.TypeCheckOptions): Result, string
    local opts: CheckOptions = {
       feat_lax = tc_opts.lax and "on" or "off",
       feat_arity = tc_opts.env and tc_opts.env.defaults.feat_arity or "on",
@@ -15031,7 +15146,7 @@ tl.type_check = function(ast: Node, tc_opts?: tl.TypeCheckOptions): Result, stri
    return tl.check(ast, tc_opts.filename, opts, tc_opts.env)
 end
 
-tl.pretty_print_ast = function(ast: Node, gen_target?: tl.TargetMode, mode?: boolean | tl.PrettyPrintOptions): string, string
+tl.pretty_print_ast = function(ast: tl.Node, gen_target?: tl.TargetMode, mode?: boolean | tl.PrettyPrintOptions): string, string
    local opts: GenerateOptions
    if mode is tl.PrettyPrintOptions then
       opts = mode
