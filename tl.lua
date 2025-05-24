@@ -518,7 +518,16 @@ local Errors = {}
 
 
 
-local tl = { GenerateOptions = {}, CheckOptions = {}, Env = {}, Result = {}, Error = {}, TypeInfo = {}, TypeReport = {}, EnvOptions = {}, Token = {}, TypeCheckOptions = {} }
+local tl = { GenerateOptions = {}, CheckOptions = {}, Env = {}, Result = {}, Error = {}, TypeInfo = {}, TypeReport = {}, EnvOptions = {}, Comment = {}, Token = {}, TypeCheckOptions = {} }
+
+
+
+
+
+
+
+
+
 
 
 
@@ -790,6 +799,7 @@ tl.typecodes = {
    UNKNOWN = 0x80008000,
    INVALID = 0x80000000,
 }
+
 
 
 
@@ -1120,6 +1130,11 @@ do
       local ti
       local in_token = false
 
+      local cx
+      local cy
+      local ci
+      local comment
+
       local function begin_token()
          tx = x
          ty = y
@@ -1132,9 +1147,12 @@ do
          tokens[nt] = {
             x = tx,
             y = ty,
+            i = ti,
             tk = tk,
             kind = kind,
+            comment = comment,
          }
+         comment = nil
          in_token = false
       end
 
@@ -1144,9 +1162,12 @@ do
          tokens[nt] = {
             x = tx,
             y = ty,
+            i = ti,
             tk = tk,
             kind = keywords[tk] and "keyword" or "identifier",
+            comment = comment,
          }
+         comment = nil
          in_token = false
       end
 
@@ -1156,9 +1177,12 @@ do
          tokens[nt] = {
             x = tx,
             y = ty,
+            i = ti,
             tk = tk,
             kind = kind,
+            comment = comment,
          }
+         comment = nil
          in_token = false
       end
 
@@ -1168,8 +1192,48 @@ do
          tokens[nt] = {
             x = tx,
             y = ty,
+            i = ti,
             tk = tk,
             kind = kind,
+            comment = comment,
+         }
+         comment = nil
+         in_token = false
+      end
+
+      local function begin_comment(open_len_or_tok, drop)
+         if comment then
+            cx = comment.x
+            cy = comment.y
+            ci = comment.i
+            comment = nil
+         else
+            if math.type(open_len_or_tok) == "integer" then
+               cx = x - open_len_or_tok
+               cy = y
+               ci = i - open_len_or_tok
+            else
+
+               if open_len_or_tok.comment then
+                  cx = open_len_or_tok.comment.x
+                  cy = open_len_or_tok.comment.y
+                  ci = open_len_or_tok.comment.i
+               else
+                  cx = open_len_or_tok.x
+                  cy = open_len_or_tok.y
+                  ci = open_len_or_tok.i
+               end
+            end
+         end
+         if drop then in_token = false end
+      end
+
+      local function end_comment(last)
+         comment = {
+            x = cx,
+            y = cy,
+            i = ci,
+            text = input:sub(ci, last or i) or "",
          }
          in_token = false
       end
@@ -1253,6 +1317,7 @@ do
             end
          elseif state == "comment short" then
             if c == "\n" then
+               end_comment(i - 1)
                state = "any"
             end
          elseif state == "got =" then
@@ -1344,7 +1409,7 @@ do
             else
                fwd = false
                state = "comment short"
-               drop_token()
+               begin_comment(2, true)
             end
          elseif state == "pragma" then
             if not lex_word[c] then
@@ -1353,9 +1418,9 @@ do
                   state = "pragma any"
                else
                   state = "comment short"
-                  table.remove(tokens)
+                  local tok = table.remove(tokens)
                   nt = nt - 1
-                  drop_token()
+                  begin_comment(tok, true)
                end
                fwd = false
             end
@@ -1393,12 +1458,13 @@ do
          elseif state == "got --[" then
             if c == "[" then
                state = "comment long"
+               begin_comment(3 + lc_open_lvl, false)
             elseif c == "=" then
                lc_open_lvl = lc_open_lvl + 1
             else
                fwd = false
                state = "comment short"
-               drop_token()
+               begin_comment(3 + lc_open_lvl, true)
                lc_open_lvl = 0
             end
          elseif state == "comment long" then
@@ -1407,7 +1473,7 @@ do
             end
          elseif state == "comment long got ]" then
             if c == "]" and lc_close_lvl == lc_open_lvl then
-               drop_token()
+               end_comment()
                state = "any"
                lc_open_lvl = 0
                lc_close_lvl = 0
