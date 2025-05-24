@@ -2130,6 +2130,7 @@ end
 
 
 
+
 local TruthyFact = {}
 
 
@@ -2206,6 +2207,9 @@ local attributes = {
 local is_attribute = attributes
 
 local Node = { ExpectedContext = {} }
+
+
+
 
 
 
@@ -2546,6 +2550,20 @@ do
       return fail(ps, i, "syntax error, expected '" .. tk .. "'")
    end
 
+   local function consume_comment(ps, i)
+      if ps.tokens[i].comment then
+         local comment = ps.tokens[i].comment
+         ps.tokens[i].comment = nil
+         return comment
+      end
+   end
+
+   local function consume_comment_after(ps, i, item)
+      if ps.tokens[i].comment and ps.tokens[i].comment.y == item.y then
+         return consume_comment(ps, i)
+      end
+   end
+
    local function verify_end(ps, i, istart, node)
       if ps.tokens[i].tk == "end" then
          local endy, endx = ps.tokens[i].y, ps.tokens[i].x
@@ -2701,6 +2719,7 @@ do
 
    local function parse_table_item(ps, i, n)
       local node = new_node(ps, i, "literal_table_item")
+      node.comment_before = consume_comment(ps, i)
       if ps.tokens[i].kind == "$EOF$" then
          return fail(ps, i, "unexpected eof")
       end
@@ -3887,6 +3906,11 @@ do
    end
 
    local function store_field_in_record(ps, i, field_name, newt, fields, field_order)
+
+
+
+
+
       if not fields[field_name] then
          fields[field_name] = newt
          table.insert(field_order, field_name)
@@ -3957,6 +3981,9 @@ do
          local item
          i, item = verify_kind(ps, i, "string", "string")
          if item then
+
+
+
             def.enumset[unquote(item.tk)] = true
          end
       end
@@ -4142,6 +4169,9 @@ do
 
       while not (ps.tokens[i].kind == "$EOF$" or ps.tokens[i].tk == "end") do
          local tn = ps.tokens[i].tk
+         local start_i = i
+
+
          if ps.tokens[i].tk == "userdata" and ps.tokens[i + 1].tk ~= ":" then
             if def.is_userdata then
                fail(ps, i, "duplicated 'userdata' declaration")
@@ -4176,6 +4206,9 @@ do
                ntt.is_nested_alias = true
             end
 
+            local cmt = consume_comment(ps, start_i)
+            if not def.comment_fields then def.comment_fields = {} end
+            def.comment_fields[v.tk] = cmt
             store_field_in_record(ps, iv, v.tk, nt.newtype, def.fields, def.field_order)
          elseif parse_type_body_fns[tn] and ps.tokens[i + 1].tk ~= ":" then
             if def.typename == "interface" and tn == "record" then
@@ -4241,6 +4274,9 @@ do
                   end
                end
 
+               local cmt = consume_comment(ps, start_i)
+               if not def.comment_fields then def.comment_fields = {} end
+               def.comment_fields[field_name] = cmt
                store_field_in_record(ps, iv, field_name, t, fields, field_order)
             elseif ps.tokens[i].tk == "=" then
                local next_word = ps.tokens[i + 1].tk
@@ -4623,9 +4659,17 @@ do
             end
          end
 
+         local start_i = i
+
          i, item = fn(ps, i)
 
          if item then
+
+
+
+            item.comment_before = consume_comment(ps, start_i)
+
+            item.comment_after = consume_comment_after(ps, i, item)
             table.insert(node, item)
          elseif i > 1 then
 
@@ -4637,6 +4681,12 @@ do
       end
 
       end_at(node, ps.tokens[i])
+
+
+
+
+
+
       return i, node
    end
 

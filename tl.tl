@@ -1919,6 +1919,7 @@ local interface RecordLikeType
    meta_fields: {string: Type}
    meta_field_order: {string}
    is_userdata: boolean
+   comment_fields: {string: Comment}
 end
 
 local record RecordType
@@ -2221,6 +2222,9 @@ local record Node
    hashbang: string
 
    is_longstring: boolean
+
+   comment_before: Comment
+   comment_after: Comment
 
    yend: integer
    xend: integer
@@ -2546,6 +2550,20 @@ local function verify_tk(ps: ParseState, i: integer, tk: string): integer
    return fail(ps, i, "syntax error, expected '" .. tk .. "'")
 end
 
+local function consume_comment(ps: ParseState, i: integer): Comment
+   if ps.tokens[i].comment then
+      local comment = ps.tokens[i].comment
+      ps.tokens[i].comment = nil
+      return comment
+   end
+end
+
+local function consume_comment_after(ps: ParseState, i: integer, item: Node): Comment
+   if ps.tokens[i].comment and ps.tokens[i].comment.y == item.y then
+      return consume_comment(ps, i)
+   end
+end
+
 local function verify_end(ps: ParseState, i: integer, istart: integer, node: Node): integer
    if ps.tokens[i].tk == "end" then
       local endy, endx = ps.tokens[i].y, ps.tokens[i].x
@@ -2701,6 +2719,7 @@ end
 
 local function parse_table_item(ps: ParseState, i: integer, n?: integer): integer, Node, integer
    local node = new_node(ps, i, "literal_table_item")
+   node.comment_before = consume_comment(ps, i)
    if ps.tokens[i].kind == "$EOF$" then
       return fail(ps, i, "unexpected eof")
    end
@@ -3887,6 +3906,11 @@ local function parse_return(ps: ParseState, i: integer): integer, Node
 end
 
 local function store_field_in_record(ps: ParseState, i: integer, field_name: string, newt: Type, fields: {string: Type}, field_order: {string}): boolean
+   -- local comment = consume_comment(ps, i)
+   -- if comment then
+   --    newt.comment_fields = newt.comment_fields or {}
+   --    newt.comment_fields[field_name] = comment
+   -- end
    if not fields[field_name] then
       fields[field_name] = newt
       table.insert(field_order, field_name)
@@ -3957,6 +3981,9 @@ parse_enum_body = function(ps: ParseState, i: integer, def: EnumType): integer, 
       local item: Node
       i, item = verify_kind(ps, i, "string", "string")
       if item then
+--          item.comment_before = consume_comment(ps, i - 1)
+--          item.comment_after = consume_comment_after(ps, i, item)
+--          table.insert(node, item)
          def.enumset[unquote(item.tk)] = true
       end
    end
@@ -4142,6 +4169,9 @@ parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType): i
 
    while not (ps.tokens[i].kind == "$EOF$" or ps.tokens[i].tk == "end") do
       local tn = ps.tokens[i].tk as BodyTypeName
+      local start_i = i
+--    while not ((not ps.tokens[i]) or ps.tokens[i].tk == "end") do
+--       consume_comment(ps, i) -- FIXME fields are not Node objects, nowhere to store comments
       if ps.tokens[i].tk == "userdata" and ps.tokens[i+1].tk ~= ":" then
          if def.is_userdata then
             fail(ps, i, "duplicated 'userdata' declaration")
@@ -4176,6 +4206,9 @@ parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType): i
             ntt.is_nested_alias = true
          end
 
+         local cmt = consume_comment(ps, start_i)
+         if not def.comment_fields then def.comment_fields = {} end
+         def.comment_fields[v.tk] = cmt
          store_field_in_record(ps, iv, v.tk, nt.newtype, def.fields, def.field_order)
       elseif parse_type_body_fns[tn] and ps.tokens[i+1].tk ~= ":" then
          if def.typename == "interface" and tn == "record" then
@@ -4241,6 +4274,9 @@ parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType): i
                end
             end
 
+            local cmt = consume_comment(ps, start_i)
+            if not def.comment_fields then def.comment_fields = {} end
+            def.comment_fields[field_name] = cmt
             store_field_in_record(ps, iv, field_name, t, fields, field_order)
          elseif ps.tokens[i].tk == "=" then
             local next_word = ps.tokens[i + 1].tk
@@ -4623,9 +4659,17 @@ parse_statements = function(ps: ParseState, i: integer, toplevel?: boolean): int
          end
       end
 
+      local start_i = i
+
       i, item = fn(ps, i)
 
       if item then
+--       local item: Node
+--       local comment_before: Comment
+--       local comment_after: Comment
+         item.comment_before = consume_comment(ps, start_i)
+--       i, item = parse_statement(ps, i)
+         item.comment_after = consume_comment_after(ps, i, item)
          table.insert(node, item)
       elseif i > 1 then
          -- heuristic to resync at the next line after an invalid statement
@@ -4637,6 +4681,12 @@ parse_statements = function(ps: ParseState, i: integer, toplevel?: boolean): int
    end
 
    end_at(node, ps.tokens[i])
+   -- for n = istart, i-1 do
+   --    local c = ps.tokens[n].comment
+   --    if c then
+   --       print("UNCONSUMED COMMENT AT ", ps.tokens[n].tk, c.y, c.x, c.text)
+   --    end
+   -- end
    return i, node
 end
 
