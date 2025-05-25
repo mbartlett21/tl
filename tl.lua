@@ -3060,11 +3060,74 @@ do
    local function unquote(str)
       local f = str:sub(1, 1)
       if f == '"' or f == "'" then
+
+
          return str:sub(2, -2), false
       end
       f = str:match("^%[=*%[")
       local l = #f + 1
-      return str:sub(l, -l), true
+      local inner = str:sub(l, -l)
+
+
+      local replaced = {}
+      local curr_start = 1
+
+
+
+
+
+
+
+      while curr_start <= #inner do
+         local next_cr = inner:find('\r', curr_start)
+         local next_lf = inner:find('\n', curr_start)
+
+         if next_cr then
+            if next_lf then
+               if next_cr < next_lf then
+
+                  table.insert(replaced, inner:sub(curr_start, next_cr - 1))
+                  table.insert(replaced, '\n')
+                  if next_cr + 1 == next_lf then
+
+                     curr_start = next_lf + 1
+                  else
+                     curr_start = next_cr + 1
+                  end
+               else
+
+                  table.insert(replaced, inner:sub(curr_start, next_lf - 1))
+                  table.insert(replaced, '\n')
+                  if next_lf + 1 == next_cr then
+
+                     curr_start = next_cr + 1
+                  else
+                     curr_start = next_lf + 1
+                  end
+               end
+            else
+
+               table.insert(replaced, inner:sub(curr_start, next_cr - 1))
+               table.insert(replaced, '\n')
+               curr_start = next_cr + 1
+            end
+         elseif next_lf then
+
+            table.insert(replaced, inner:sub(curr_start, next_lf - 1))
+            table.insert(replaced, '\n')
+            curr_start = next_lf + 1
+         else
+
+            table.insert(replaced, inner:sub(curr_start))
+            break
+         end
+      end
+
+      if replaced[1] == '' and replaced[2] == '\n' then
+         return table.concat(replaced, '', 3), true
+      else
+         return table.concat(replaced), true
+      end
    end
 
    local function parse_literal(ps, i)

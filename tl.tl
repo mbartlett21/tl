@@ -3060,11 +3060,74 @@ end
 local function unquote(str: string): string, boolean
    local f = str:sub(1, 1)
    if f == '"' or f == "'" then
+      -- TODO: process escapes
+      -- return unescape(str:sub(2, -2)), false
       return str:sub(2, -2), false
    end
    f = str:match("^%[=*%[")
    local l = #f + 1
-   return str:sub(l, -l), true
+   local inner = str:sub(l, -l)
+   -- replace all the newline sequences with \n
+
+   local replaced = {}
+   local curr_start = 1
+
+   -- Lua works with converting the four possible newline sequences to \n
+   -- \r\n -- Windows
+   -- \n\r -- shouldn't ever be used anywhere but Lua converts it
+   -- \r   -- Mac OS
+   -- \n   -- Unix
+
+   while curr_start <= #inner do
+      local next_cr = inner:find('\r', curr_start)
+      local next_lf = inner:find('\n', curr_start)
+
+      if next_cr then
+         if next_lf then
+            if next_cr < next_lf then
+               -- CR or CRLF
+               table.insert(replaced, inner:sub(curr_start, next_cr - 1))
+               table.insert(replaced, '\n')
+               if next_cr + 1 == next_lf then
+                  -- CRLF
+                  curr_start = next_lf + 1
+               else
+                  curr_start = next_cr + 1
+               end
+            else -- next_lf < next_cr
+               -- LF or LFCR
+               table.insert(replaced, inner:sub(curr_start, next_lf - 1))
+               table.insert(replaced, '\n')
+               if next_lf + 1 == next_cr then
+                  -- LFCR
+                  curr_start = next_cr + 1
+               else
+                  curr_start = next_lf + 1
+               end
+            end
+         else
+            -- CR
+            table.insert(replaced, inner:sub(curr_start, next_cr - 1))
+            table.insert(replaced, '\n')
+            curr_start = next_cr + 1
+         end
+      elseif next_lf then
+         -- LF only
+         table.insert(replaced, inner:sub(curr_start, next_lf - 1))
+         table.insert(replaced, '\n')
+         curr_start = next_lf + 1
+      else
+         -- no more newline
+         table.insert(replaced, inner:sub(curr_start))
+         break
+      end
+   end
+
+   if replaced[1] == '' and replaced[2] == '\n' then -- ignore the first newline
+      return table.concat(replaced, '', 3), true
+   else
+      return table.concat(replaced), true
+   end
 end
 
 local function parse_literal(ps: ParseState, i: integer): integer, Node
