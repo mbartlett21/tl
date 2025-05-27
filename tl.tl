@@ -655,7 +655,7 @@ local record tl
       "keyword"
       "op"
       "string"
-      "[" "]" "(" ")" "{" "}" "," ":" "." ";" "?"
+      "[" "]" "(" ")" "{" "}" "," ":" "." ";" "?" "!"
       "::"
       "..."
       "identifier"
@@ -1039,7 +1039,7 @@ do
    end
 
    local lex_any_char_kinds: {string:TokenKind} = {}
-   local single_char_kinds: {TokenKind} = {"[", "]", "(", ")", "{", "}", ",", ";", "?"}
+   local single_char_kinds: {TokenKind} = {"[", "]", "(", ")", "{", "}", ",", ";", "?", "!"}
    for _, c in ipairs(single_char_kinds) do
       lex_any_char_kinds[c] = c
    end
@@ -1720,6 +1720,10 @@ local interface Type
    typeid: integer       -- unique identifier
    inferred_at: Where    -- for error messages
    needs_compat: boolean -- for Lua compatibilty
+
+   -- for optional and nonoptional types
+   includes_nil: boolean
+   -- includes_false: boolean
 end
 
 local record GenericType
@@ -2266,6 +2270,7 @@ local function a_type<T is Type>(w: Where, typename: TypeName, t: T): T
    t.x = w.x
    t.y = w.y
    t.typename = typename
+   t.includes_nil = true
    do
       local ty: Type = t
       setmetatable(ty, type_mt)
@@ -2519,6 +2524,7 @@ local function new_type(ps: ParseState, i: integer, typename: TypeName): Type
    t.x = token.x
    t.y = token.y
    t.typename = typename
+   t.includes_nil = true
    return t
 end
 
@@ -2964,6 +2970,10 @@ parse_type = function(ps: ParseState, i: integer): integer, FirstClassType, inte
       i = i + 1
       local t: Type
       i, t = parse_type(ps, i)
+      if ps.tokens[i].tk == "!" then
+         i = i + 1
+         t.includes_nil = false
+      end
       i = verify_tk(ps, i, ")")
       return i, t
    end
@@ -2974,6 +2984,10 @@ parse_type = function(ps: ParseState, i: integer): integer, FirstClassType, inte
    if not bt then
       return i
    end
+   if ps.tokens[i].tk == "!" then
+      i = i + 1
+      bt.includes_nil = false
+   end
    if ps.tokens[i].tk == "|" then
       local u = new_type(ps, istart, "union") as UnionType
       u.types = { bt }
@@ -2983,10 +2997,23 @@ parse_type = function(ps: ParseState, i: integer): integer, FirstClassType, inte
          if not bt then
             return i
          end
+         if ps.tokens[i].tk == "!" then
+            i = i + 1
+            bt.includes_nil = false
+         end
          table.insert(u.types, bt)
       end
       bt = u
    end
+   -- if ps.tokens[i].tk == "!" then
+   --    i = i + 1
+   --    bt.includes_nil = false
+   --    if bt is UnionType then
+   --       for _, v in ipairs(bt.types) do
+   --          bt.includes_nil = false
+   --       end
+   --    end
+   -- end
    return i, bt
 end
 
@@ -7031,6 +7058,8 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
       return show_type(typ, short, seen)
    end
 
+   local ext = t.includes_nil and "" or "!"
+
    if t is NominalType then
       local ret: string
       if t.typevals then
@@ -7048,16 +7077,16 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
       if TL_DEBUG then
          ret = "nominal " .. ret
       end
-      return ret
+      return ret .. ext
    elseif t is SelfType then
       if t.display_type then
          local ret = show_type_base(t.display_type, short, seen)
          if TL_DEBUG then
             ret = "self " .. ret
          end
-         return ret
+         return ret .. ext
       end
-      return "self"
+      return "self" .. ext
    elseif t is TupleType then
       local out: {string} = {}
       for _, v in ipairs(t.tuple) do
@@ -7076,7 +7105,7 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
       for _, v in ipairs(t.types) do
          table.insert(out, show(v))
       end
-      return "{" .. table.concat(out, ", ") .. "}"
+      return "{" .. table.concat(out, ", ") .. "}" .. ext
    elseif t is PolyType then
       local out: {string} = {}
       for _, v in ipairs(t.types) do
@@ -7090,15 +7119,15 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
       end
       return table.concat(out, " | ")
    elseif t is EmptyTableType then
-      return "{}"
+      return "{}" .. ext
    elseif t is MapType then
-      return "{" .. show(t.keys) .. " : " .. show(t.values) .. "}"
+      return "{" .. show(t.keys) .. " : " .. show(t.values) .. "}" .. ext
    elseif t is ArrayType then
-      return "{" .. show(t.elements) .. "}"
+      return "{" .. show(t.elements) .. "}" .. ext
    elseif t is EnumType then
-      return t.declname or "enum"
+      return (t.declname or "enum") .. ext
    elseif t is RecordLikeType then
-      return short and (t.declname or t.typename) or t.typename .. show_fields(t, show)
+      return short and (t.declname or t.typename) or t.typename .. show_fields(t, show) .. ext
    elseif t is FunctionType then
       local out: {string} = {"function("}
       local args = {}
@@ -7123,7 +7152,7 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
             table.insert(out, ")")
          end
       end
-      return table.concat(out)
+      return table.concat(out) .. ext
    elseif t is GenericType then
       local out: {string} = {}
       local name, rest: string, string
@@ -7143,29 +7172,29 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
       table.insert(out, table.concat(typeargs, ", "))
       table.insert(out, ">")
       table.insert(out, rest)
-      return table.concat(out)
+      return table.concat(out) .. ext
    elseif t.typename == "number"
        or t.typename == "integer"
        or t.typename == "boolean"
        or t.typename == "thread" then
-      return t.typename
+      return t.typename .. ext
    elseif t is StringType then
       if short then
-         return "string"
+         return "string" .. ext
       else
          return t.typename ..
-                (t.literal and string.format(" %q", t.literal) or "")
+                (t.literal and string.format(" %q", t.literal) or ext)
       end
    elseif t is TypeVarType then
-      return display_typevar(t.typevar, "typevar")
+      return display_typevar(t.typevar, "typevar") .. ext
    elseif t is TypeArgType then
       local out = display_typevar(t.typearg, "typearg")
       if t.constraint then
          out = out .. " is " .. show(t.constraint)
       end
-      return out
+      return out .. ext
    elseif t is UnresolvableTypeArgType then
-      return display_typevar(t.typearg, "typearg") .. " (unresolved generic)"
+      return display_typevar(t.typearg, "typearg") .. " (unresolved generic)" .. ext
    elseif is_unknown(t) then
       return "<unknown type>"
    elseif t is InvalidType then
@@ -7175,13 +7204,13 @@ local function show_type_base(t: Type, short: boolean, seen: {Type:string}): str
    elseif t is NilType then
       return "nil"
    elseif t.typename == "boolean_context" then
-      return "boolean"
+      return "boolean" .. ext
    elseif t.typename == "none" then
       return ""
    elseif t is TypeDeclType then
       return (t.is_alias and "type alias to " or "type ") .. show(t.def)
    else
-      return "<" .. t.typename .. ">" -- TODO add string.format("%p", t) with compat-5.4
+      return "<" .. t.typename .. ">" .. ext -- TODO add string.format("%p", t) with compat-5.4
    end
 end
 
@@ -7641,6 +7670,7 @@ do
          typename = "record",
          field_order = sorted_keys(globals),
          fields = globals,
+         includes_nil = false,
       }, nil
    end
 
@@ -7715,6 +7745,14 @@ do
 
          return t, var.attribute
       end
+   end
+
+   local function make_nillable<T is Type>(t: T): T
+      if not t.includes_nil then
+         t = shallow_copy_new_type(t)
+         t.includes_nil = true
+      end
+      return t
    end
 
    local function ensure_not_method<T is Type>(t: T): T
@@ -8006,6 +8044,7 @@ do
          copy.f = t.f
          copy.x = t.x
          copy.y = t.y
+         copy.includes_nil = t.includes_nil
 
          if t is GenericType then
             assert(copy is GenericType)
@@ -8903,6 +8942,8 @@ do
       local types_seen: {(integer|string):boolean} = {}
       -- but never add nil as a type in the union
       types_seen["nil"] = true
+      local includes_nil = false
+      -- FIXME: ^^ perhaps?
 
       local i = 1
       while types[i] or stack[1] do
@@ -8919,6 +8960,7 @@ do
                table.insert(stack, s)
             end
          else
+            if t.includes_nil then includes_nil = true end
             if primitive[t.typename] and (flatten_constants or (t is StringType and not t.literal)) then
                if not types_seen[t.typename] then
                   types_seen[t.typename] = true
@@ -8942,9 +8984,12 @@ do
       end
 
       if #ts == 1 then
+         ts[1].includes_nil = includes_nil
          return ts[1]
       else
-         return a_union(w, ts)
+         local t = a_union(w, ts)
+         t.includes_nil = includes_nil
+         return t
       end
    end
 
@@ -9815,6 +9860,11 @@ do
 
    -- subtyping comparison
    function TypeChecker:is_a(t1: Type, t2: Type): boolean, {Error}
+      assert(t1.includes_nil ~= nil)
+      assert(t2.includes_nil ~= nil)
+      if not (t1 is TypeArgType or t1 is TypeVarType) and t1.includes_nil and not t2.includes_nil then
+         return false, { Err("type %s doesn't include nil, but %s does", t2, t1) }
+      end
       return compare_types(self, self.subtype_relations, t1, t2)
    end
 
@@ -9822,6 +9872,15 @@ do
    function TypeChecker:same_type(t1: Type, t2: Type): boolean, {Error}
       -- except for error messages, behavior is the same as
       -- `return (is_a(t1, t2) and self:is_a(t2, t1))`
+      if t1.includes_nil ~= t2.includes_nil then
+         if t1.includes_nil then -- 
+            return false, { Err("type %s includes nil, but %s doesn't", t1, t2) }
+         else -- t2.includes_nil
+            return false, { Err("type %s includes nil, but %s doesn't", t2, t1) }
+         end
+      end
+      assert(t1.includes_nil ~= nil)
+      assert(t2.includes_nil ~= nil)
       return compare_types(self, self.eqtype_relations, t1, t2)
    end
 
@@ -10848,6 +10907,7 @@ do
    end
 
    function TypeChecker:expand_type(w: Where, old: Type, new: Type): Type
+      -- TODO: See what NilType check does here
       if not old or old is NilType then
          return new
       end
@@ -12323,7 +12383,7 @@ do
                -- If we assign a method to a variable, e.g:
                -- `local myfunc = myobj.dothing`,
                -- the variable should not be treated as a method
-               infertype = ensure_not_method(infertype)
+               infertype = make_nillable(ensure_not_method(infertype))
             end
          end
       end
@@ -13680,7 +13740,7 @@ do
                   tk = node.e2.tk,
                   kind = "string",
                })
-               local btype = a_type(node.e2, "string", { literal = node.e2.tk } as StringType)
+               local btype = a_type(node.e2, "string", { literal = node.e2.tk, includes_nil = false } as StringType)
                local t = self:type_check_index(node.e1, bnode, ua, btype)
 
                if t.needs_compat and self.gen_compat ~= "off" then
@@ -13978,6 +14038,10 @@ do
 
                if types_op == numeric_binop or node.op.op == ".." then
                   node.known = FACT_TRUTHY
+                  if t and t.includes_nil then
+                     t = shallow_copy_new_type(t)
+                     t.includes_nil = false
+                  end
                end
 
                if node.op.op == "//" and self.gen_target == "5.1" then
@@ -14123,13 +14187,14 @@ do
 
    local function after_literal(_self: TypeChecker, node: Node): Type
       node.known = FACT_TRUTHY
-      return a_type(node, node.kind as TypeName, {})
+      return a_type(node, node.kind as TypeName, { includes_nil = node.tk == "nil" })
    end
 
    visit_node.cbs["string"] = {
       after = function(self: TypeChecker, node: Node, _children: {Type}): Type
          local t = after_literal(self, node) as StringType
          t.literal = node.conststr
+         t.includes_nil = false
 
          local expected = node.expected and self:to_structural(node.expected)
          if expected and expected is EnumType and self:is_a(t, expected) then
