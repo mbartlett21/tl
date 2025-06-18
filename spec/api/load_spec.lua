@@ -1,4 +1,12 @@
-require("compat53")
+local function lf(dat)
+   local done = false
+   return function()
+      if not done then
+         done = true
+         return dat
+      end
+   end
+end
 
 describe("tl.load", function()
 
@@ -11,7 +19,7 @@ describe("tl.load", function()
             local program, err = tl.load('local a: string = "hey"; return a')
             return program()
          ]]
-         local lua_chunk = load(lua_code)
+         local lua_chunk = load(lf(lua_code))
          local result = lua_chunk()
          assert.same(result, "hey")
       end)
@@ -25,7 +33,7 @@ describe("tl.load", function()
             assert(program == nil)
             return err
          ]]
-         local lua_chunk = load(lua_code)
+         local lua_chunk = load(lf(lua_code))
          local result = lua_chunk()
          assert.match(result, "code.tl:1:19: in local declaration: a: got integer, expected string")
       end)
@@ -38,7 +46,7 @@ describe("tl.load", function()
             local program, err = tl.load('local a: string = 123; return a', 'code.tl')
             return program()
          ]]
-         local lua_chunk = load(lua_code)
+         local lua_chunk = load(lf(lua_code))
          local result = lua_chunk()
          assert.same(result, 123)
       end)
