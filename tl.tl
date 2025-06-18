@@ -5482,6 +5482,41 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
       return n.is_longstring
    end
 
+   local escape_utf8_for_51: function(c: integer): string
+
+   if utf8 then
+      escape_utf8_for_51 = function(codepoint: integer): string
+         return (utf8.char(codepoint):gsub(".", function(c: string): string
+            return ("\\%03d"):format(c:byte())
+         end))
+      end
+   else
+      escape_utf8_for_51 = function(codepoint: integer): string
+         if codepoint < 0x80 then
+            return ("\\%03d"):format(codepoint)
+         else
+            -- we need continuation bytes
+
+            -- note that these are always incremented at least by 1
+            local mfb = 0x3f -- 0b0011_1111
+            local first_header = 0x80 -- 0b1000_0000
+
+            local buff = {}
+            local n = 1
+            repeat
+               -- since this code will be used for 5.1, we have to make do with poor man's bitops
+               buff[9 - n] = ("\\%03d"):format(0x80 + (codepoint % 0x40))
+               n = n + 1
+               codepoint = codepoint // 0x40
+               mfb = mfb // 2
+               first_header = 0x80 + first_header // 2
+            until codepoint <= mfb
+            buff[9 - n] = ("\\%03d"):format(first_header + codepoint)
+            return table.concat(buff, '', 9 - n, 8)
+         end
+      end
+   end
+
    visit_node.cbs = {
       ["statements"] = {
          after = function(_: nil, node: Node, children: {Output}): Output
@@ -5967,10 +6002,8 @@ function tl.generate(ast: tl.Node, gen_target: GenTarget, opts?: GenerateOptions
                   table.insert(replaced, str:sub(currstrstart, slashpos - 1))
                   local _, e, hex_digits = str:find("{(.-)}", slashpos + 2)
                   local codepoint <const> = tonumber(hex_digits, 16)
-                  local sequence <const> = utf8.char(codepoint)
-                  table.insert(replaced, (sequence:gsub(".", function(c: string): string
-                     return ("\\%03d"):format(string.byte(c))
-                  end)))
+                  local sequence <const> = escape_utf8_for_51(codepoint)
+                  table.insert(replaced, sequence)
                   currstrstart = e + 1
                   i = currstrstart
                else
@@ -15011,6 +15044,16 @@ tl.gen = function(input: string, env?: Env, opts?: GenerateOptions, parse_lang?:
    return code, result
 end
 
+local function pass_code_for_load(code: string): function(): string
+   local done = false
+   return function(): string
+      if not done then
+         done = true
+         return code
+      end
+   end
+end
+
 local function tl_package_loader(module_name: string): any, any
    local found_filename, fd, tried = tl.search_module(module_name, false)
    if found_filename then
@@ -15043,7 +15086,7 @@ local function tl_package_loader(module_name: string): any, any
       -- TODO: should this be a hard error? this seems analogous to
       -- finding a lua file with a syntax error in it
       local code = assert(tl.generate(program, opts.defaults.gen_target, fast_generate_opts))
-      local chunk, err = load(code, "@" .. found_filename, "t")
+      local chunk, err = load(pass_code_for_load(code), "@" .. found_filename, "t")
       if chunk then
          return function(modname: string, loader_data: string): any
             if loader_data == nil then
@@ -15116,7 +15159,7 @@ tl.load = function(input: string, chunkname?: string, mode?: LoadMode, ...: {any
       return nil, err
    end
 
-   return load(code, chunkname, mode, ...)
+   return load(pass_code_for_load(code), chunkname, mode, ...)
 end
 
 tl.version = function(): string

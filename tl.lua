@@ -5482,6 +5482,41 @@ function tl.generate(ast, gen_target, opts)
       return n.is_longstring
    end
 
+   local escape_utf8_for_51
+
+   if utf8 then
+      escape_utf8_for_51 = function(codepoint)
+         return (utf8.char(codepoint):gsub(".", function(c)
+            return ("\\%03d"):format(c:byte())
+         end))
+      end
+   else
+      escape_utf8_for_51 = function(codepoint)
+         if codepoint < 0x80 then
+            return ("\\%03d"):format(codepoint)
+         else
+
+
+
+            local mfb = 0x3f
+            local first_header = 0x80
+
+            local buff = {}
+            local n = 1
+            repeat
+
+               buff[9 - n] = ("\\%03d"):format(0x80 + (codepoint % 0x40))
+               n = n + 1
+               codepoint = math.floor(codepoint / 0x40)
+               mfb = math.floor(mfb / 2)
+               first_header = 0x80 + math.floor(first_header / 2)
+            until codepoint <= mfb
+            buff[9 - n] = ("\\%03d"):format(first_header + codepoint)
+            return table.concat(buff, '', 9 - n, 8)
+         end
+      end
+   end
+
    visit_node.cbs = {
       ["statements"] = {
          after = function(_, node, children)
@@ -5967,10 +6002,8 @@ function tl.generate(ast, gen_target, opts)
                   table.insert(replaced, str:sub(currstrstart, slashpos - 1))
                   local _, e, hex_digits = str:find("{(.-)}", slashpos + 2)
                   local codepoint = tonumber(hex_digits, 16)
-                  local sequence = utf8.char(codepoint)
-                  table.insert(replaced, (sequence:gsub(".", function(c)
-                     return ("\\%03d"):format(string.byte(c))
-                  end)))
+                  local sequence = escape_utf8_for_51(codepoint)
+                  table.insert(replaced, sequence)
                   currstrstart = e + 1
                   i = currstrstart
                else
@@ -15011,6 +15044,16 @@ tl.gen = function(input, env, opts, parse_lang)
    return code, result
 end
 
+local function pass_code_for_load(code)
+   local done = false
+   return function()
+      if not done then
+         done = true
+         return code
+      end
+   end
+end
+
 local function tl_package_loader(module_name)
    local found_filename, fd, tried = tl.search_module(module_name, false)
    if found_filename then
@@ -15043,7 +15086,7 @@ local function tl_package_loader(module_name)
 
 
       local code = assert(tl.generate(program, opts.defaults.gen_target, fast_generate_opts))
-      local chunk, err = load(code, "@" .. found_filename, "t")
+      local chunk, err = load(pass_code_for_load(code), "@" .. found_filename, "t")
       if chunk then
          return function(modname, loader_data)
             if loader_data == nil then
@@ -15116,7 +15159,7 @@ tl.load = function(input, chunkname, mode, ...)
       return nil, err
    end
 
-   return load(code, chunkname, mode, ...)
+   return load(pass_code_for_load(code), chunkname, mode, ...)
 end
 
 tl.version = function()
