@@ -14398,7 +14398,7 @@ do
    end
 
    do
-      local function add_interface_fields(self: TypeChecker, fields: {string:Type}, field_order: {string}, resolved: RecordLikeType, named: NominalType, list?: MetaMode)
+      local function add_interface_fields(self: TypeChecker, fields: {string:Type}, field_order: {string}, resolved: InterfaceType, named: NominalType, list?: MetaMode)
          for fname, ftype in fields_of(resolved, list) do
             if fields[fname] then
                if not self:is_a(fields[fname], ftype) then
@@ -14453,6 +14453,10 @@ do
             if iface is NominalType then
                local ri = self:resolve_nominal(iface)
                assert(ri is InterfaceType)
+
+               -- interfaces haven't necessarily been expanded already
+               self:expand_interfaces(ri)
+
                add_interface_fields(self, t.fields, t.field_order, ri, iface)
                if ri.meta_fields then
                   t.meta_fields = t.meta_fields or {}

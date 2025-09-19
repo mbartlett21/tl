@@ -256,4 +256,51 @@ describe("subtyping of interfaces:", function()
       local _a: A = { "a", "b" }
       local _b: B = { "c" }
    ]]))
+
+   it("nested interfaces work when nested and out of order", util.check([[
+      local interface Group
+         interface C
+            is B
+            field_c: string
+         end
+         interface B
+            is A
+            field_b: string
+         end
+         interface A
+            field_a: string
+         end
+      end
+
+      local v: Group.C
+
+      local a: string = v.field_a
+      local b: string = v.field_b
+      local c: string = v.field_c
+   ]]))
+
+   it("nested interfaces work for subtyping", util.check([[
+      local interface Group
+         interface C
+            is B
+            field_c: string
+         end
+         interface B
+            is A
+            field_b: string
+         end
+         interface A
+            field_a: string
+         end
+      end
+
+      local c: Group.C
+      local b: Group.B
+      local a: Group.A
+
+      local c_is_a: Group.A = c
+      local c_is_b: Group.B = c
+
+      local b_is_a: Group.A = b
+   ]]))
 end)

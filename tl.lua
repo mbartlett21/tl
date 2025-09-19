@@ -14453,6 +14453,10 @@ self:expand_type(node, values, elements) })
             if iface.typename == "nominal" then
                local ri = self:resolve_nominal(iface)
                assert(ri.typename == "interface")
+
+
+               self:expand_interfaces(ri)
+
                add_interface_fields(self, t.fields, t.field_order, ri, iface)
                if ri.meta_fields then
                   t.meta_fields = t.meta_fields or {}
