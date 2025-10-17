@@ -2,7 +2,7 @@
 -- Performance tricks
 --------------------------------------------------------------------------------
 
-local teal = require("teal.init")
+local type teal = require("teal.init")
 
 -- This is loading an internal API, but this is a "lower-level hack",
 -- not intended as regular use of the Teal API.

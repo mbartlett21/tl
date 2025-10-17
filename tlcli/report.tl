@@ -1,5 +1,5 @@
 local type TlConfig = require("tlcli.tlconfig")
-local teal = require("teal.init")
+local type teal = require("teal.init")
 local common = require("tlcli.common")
 local type Compiler = teal.Compiler
 local type Error = teal.Error

@@ -8617,7 +8617,7 @@ local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 th
 
 
 
-local targets = require("teal.gen.targets")
+
 
 
 local types = require("teal.types")
@@ -9497,7 +9497,7 @@ package.preload["teal.lexer"] = function(...)
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table
 
 
-local errors = require("teal.errors")
+
 
 
 local util = require("teal.util")

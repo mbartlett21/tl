@@ -1,7 +1,7 @@
 --------------------------------------------------------------------------------
 -- Lexer
 --------------------------------------------------------------------------------
-local errors = require("teal.errors")
+local type errors = require("teal.errors")
 local type Error = errors.Error
 
 local util = require("teal.util")
