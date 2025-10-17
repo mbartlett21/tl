@@ -4,7 +4,7 @@
 local type attributes = require("teal.attributes")
 local type Attribute = attributes.Attribute
 
-local targets = require("teal.gen.targets")
+local type targets = require("teal.gen.targets")
 local type GenTarget = targets.GenTarget
 
 local types = require("teal.types")

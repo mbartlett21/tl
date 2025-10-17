@@ -1,9 +1,9 @@
-local type = type; local environment = require("teal.environment")
+local type = type
 
 
 
 
-local errors = require("teal.errors")
+
 
 local lexer = require("teal.lexer")
 
@@ -13,7 +13,7 @@ local package_loader = require("teal.package_loader")
 local parser = require("teal.parser")
 
 local targets = require("teal.gen.targets")
-local type_reporter = require("teal.type_reporter")
+
 
 
 local v2 = require("teal.api.v2")
