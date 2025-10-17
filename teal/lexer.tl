@@ -63,7 +63,12 @@ do
       "got <"
       "got >"
       "got /"
+      "got //"
       "got :"
+      "got +"
+      "got *"
+      "got ^"
+      "got %"
       "got --["
       "string single"
       "string single got \\"
@@ -100,7 +105,12 @@ do
       ["got <"] = "op",
       ["got >"] = "op",
       ["got /"] = "op",
+      ["got //"] = "op",
       ["got :"] = "op",
+      ["got +"] = "op",
+      ["got *"] = "op",
+      ["got ^"] = "op",
+      ["got %"] = "op",
       ["got --["] = nil, -- drop comment
       ["string single"] = "$ERR$",
       ["string single got \\"] = "$ERR$",
@@ -157,6 +167,10 @@ do
       [">"] = "got >",
       ["/"] = "got /",
       [":"] = "got :",
+      ["+"] = "got +",
+      ["*"] = "got *",
+      ["^"] = "got ^",
+      ["%"] = "got %",
       ["="] = "got =",
       ["~"] = "got ~",
       ["["] = "got [",
@@ -505,13 +519,19 @@ do
             if c == "-" then
                state = "got --"
             else
-               end_token("op", "-")
-               fwd = false
+               if c == "=" then
+                  end_token("op", "-=")
+               else
+                  end_token("op", "-")
+                  fwd = false
+               end
                state = "any"
             end
          elseif state == "got .." then
             if c == "." then
                end_token("...", "...")
+            elseif c == "=" then
+               end_token("op", "..=")
             else
                end_token("op", "..")
                fwd = false
@@ -673,9 +693,63 @@ do
          elseif state == "got /" then
             local t: string
             if c == "/" then
-               t = "//"
+               state = "got //"
             else
-               t = "/"
+               if c == "=" then
+                  t = "/="
+               else
+                  t = "/"
+                  fwd = false
+               end
+               end_token("op", t)
+               state = "any"
+            end
+         elseif state == "got //" then
+            local t: string
+            if c == "=" then
+               t = "//="
+            else
+               t = "//"
+               fwd = false
+            end
+            end_token("op", t)
+            state = "any"
+         elseif state == "got +" then
+            local t: string
+            if c == "=" then
+               t = "+="
+            else
+               t = "+"
+               fwd = false
+            end
+            end_token("op", t)
+            state = "any"
+         elseif state == "got *" then
+            local t: string
+            if c == "=" then
+               t = "*="
+            else
+               t = "*"
+               fwd = false
+            end
+            end_token("op", t)
+            state = "any"
+         elseif state == "got ^" then
+            local t: string
+            if c == "=" then
+               t = "^="
+            else
+               t = "^"
+               fwd = false
+            end
+            end_token("op", t)
+            state = "any"
+         elseif state == "got %" then
+            local t: string
+            if c == "=" then
+               t = "%="
+            else
+               t = "%"
                fwd = false
             end
             end_token("op", t)

@@ -2183,6 +2183,27 @@ do
       return i, node
    end
 
+   local assignops: {string:string} = {
+      ["="] = "",
+      ["+="] = "+",
+      ["-="] = "-",
+      ["*="] = "*",
+      ["/="] = "/",
+      ["//="] = "//",
+      ["^="] = "^",
+      ["%="] = "%",
+      ["..="] = "..",
+   }
+
+   local repeatable_expr: {NodeKind:boolean} = {
+      ["nil"] = true,
+      ["string"] = true,
+      ["number"] = true,
+      ["integer"] = true,
+      ["boolean"] = true,
+      ["identifier"] = true,
+   }
+
    parse_call_or_assignment = function(ps: ParseState, i: integer): integer, Node
       local exp: Node
       local istart = i
@@ -2210,12 +2231,54 @@ do
          end
       end
 
-      if ps.tokens[i].tk ~= "=" then
-         verify_tk(ps, i, "=")
-         return i
+      local op = assignops[ps.tokens[i].tk]
+
+      local eq = i
+
+      if asgn.vars[2] then
+         if ps.tokens[i].tk ~= "=" then
+            verify_tk(ps, i, "=")
+            return i
+         end
+      elseif not op then
+         return fail(ps, i, "syntax error, expected '=' or '[op]='")
       end
 
       i, asgn = parse_assignment_expression_list(ps, i, asgn)
+
+      if not asgn then return i end
+      if op ~= "" then
+         -- not a simple assignment
+         if not asgn.exps then return i, asgn end
+
+         -- we now check the other exps
+         local expr = asgn.exps[1]
+         local a = asgn.vars[1]
+
+         local exprop: Node = {
+            f = ps.filename,
+            y = ps.tokens[eq].y,
+            x = ps.tokens[eq].x,
+            kind = "op",
+            op = parser.operator(a, 2, op),
+            e1 = a,
+            e2 = expr,
+         }
+
+         asgn.exps[1] = exprop
+
+         if a.kind ~= "variable" then
+            local table_expr = a.e1
+            local key_expr = a.e2
+
+            -- TODO: compile this to a do statement and cache the variable and key
+            if table_expr.kind ~= "variable" then
+               return fail(ps, eq, "assignment too complex: table not constant")
+            elseif not repeatable_expr[key_expr.kind] then
+               return fail(ps, eq, "assignment too complex: key not constant")
+            end
+         end
+      end
       return i, asgn
    end
 end
