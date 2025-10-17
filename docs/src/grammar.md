@@ -16,7 +16,7 @@ precedence, see below.
    block ::= {stat} [retstat]
 
    stat ::=  ‘;’ |
-       varlist ‘=’ explist |
++      varlist assignop explist |
        functioncall |
        label |
        ‘break’ |
@@ -41,6 +41,8 @@ precedence, see below.
 *      ‘global’ ‘interface’ Name recordbody |
 *      ‘global’ ‘enum’ Name enumbody |
 *      ‘global’ ‘type’ Name [‘=’ newtype]
+
++  assignop ::= ‘=’ | ‘+=’ | ‘-=’ | ‘*=’ | ‘/=’ | ‘//=’ | ‘^=’ | ‘%=’ | ‘..=’
 
    attnamelist ::=  Name [attrib] {‘,’ Name [attrib]}
 
