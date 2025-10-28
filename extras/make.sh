@@ -49,11 +49,11 @@ function remove_all_lua2() {
 ## ----------------------------------------
 
 function move_all_lua1_to_lua() {
+   local lua_file luabak_file
    for_all '*.lua.1' in _temp | while read -r lua1_file
    do
-      local lua_file
       lua_file="$(strip_prefix_and_suffix "$lua1_file" "_temp/" ".1")"
-      local luabak_file="_temp/$lua_file.bak"
+      luabak_file="_temp/$lua_file.bak"
 
       cp "$lua_file" "$luabak_file"
       cp "$lua1_file" "$lua_file"
@@ -69,9 +69,9 @@ function restore_backup_and_fail() {
 }
 
 function diff_all_lua1_and_lua2() {
+   local lua2_file
    for_all '*.lua.1' in _temp | while read -r lua1_file
    do
-      local lua2_file
       lua2_file="$(strip_prefix_and_suffix "$lua1_file" "" ".1").2"
 
       diff "$lua1_file" "$lua2_file" || exit 1
