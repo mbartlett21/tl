@@ -84,6 +84,7 @@ end
 local recurse_type
 
 local function aggregate_type_walker(s, ast, visit)
+   assert(ast.types)
    local xs = {}
    for i, child in ipairs(ast.types) do
       xs[i] = recurse_type(s, child, visit)
@@ -92,6 +93,7 @@ local function aggregate_type_walker(s, ast, visit)
 end
 
 local function record_like_type_walker(s, ast, visit)
+   assert(ast.fields)
    local xs = {}
    if ast.interface_list then
       for _, child in ipairs(ast.interface_list) do
@@ -138,6 +140,7 @@ local type_walkers = {
    ["*"] = false,
 
    ["generic"] = function(s, ast, visit)
+      assert(ast.typename == "generic")
       local xs = {}
       for _, child in ipairs(ast.typeargs) do
          table.insert(xs, recurse_type(s, child, visit))
@@ -146,6 +149,7 @@ local type_walkers = {
       return xs
    end,
    ["tuple"] = function(s, ast, visit)
+      assert(ast.typename == "tuple")
       local xs = {}
       for i, child in ipairs(ast.tuple) do
          xs[i] = recurse_type(s, child, visit)
@@ -156,6 +160,7 @@ local type_walkers = {
    ["tupletable"] = aggregate_type_walker,
    ["poly"] = aggregate_type_walker,
    ["map"] = function(s, ast, visit)
+      assert(ast.typename == "map")
       return {
          recurse_type(s, ast.keys, visit),
          recurse_type(s, ast.values, visit),
@@ -164,6 +169,7 @@ local type_walkers = {
    ["record"] = record_like_type_walker,
    ["interface"] = record_like_type_walker,
    ["function"] = function(s, ast, visit)
+      assert(ast.typename == "function")
       local xs = {}
       if ast.args then
          for _, child in ipairs(ast.args.tuple) do
@@ -178,6 +184,7 @@ local type_walkers = {
       return xs
    end,
    ["nominal"] = function(s, ast, visit)
+      assert(ast.typename == "nominal")
       local xs = {}
       if ast.typevals then
          for _, child in ipairs(ast.typevals) do
@@ -187,22 +194,26 @@ local type_walkers = {
       return xs
    end,
    ["typearg"] = function(s, ast, visit)
+      assert(ast.typename == "typearg")
       return {
          ast.constraint and recurse_type(s, ast.constraint, visit),
       }
    end,
    ["array"] = function(s, ast, visit)
+      assert(ast.typename == "array")
       return {
          recurse_type(s, ast.elements, visit),
       }
    end,
    ["literal_table_item"] = function(s, ast, visit)
+      assert(ast.typename == "literal_table_item")
       return {
          recurse_type(s, ast.ktype, visit),
          recurse_type(s, ast.vtype, visit),
       }
    end,
    ["typedecl"] = function(s, ast, visit)
+      assert(ast.typename == "typedecl")
       return {
          recurse_type(s, ast.def, visit),
       }
@@ -483,6 +494,7 @@ function traversal.traverse_nodes(s, root,
    local visit_after = visit_node.after
 
    recurse = function(ast)
+      assert(ast.kind ~= nil)
       local xs = {}
       local kind = assert(ast.kind)
       local kprint

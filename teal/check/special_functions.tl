@@ -56,7 +56,8 @@ end
 
 --------------------------------------------------------------------------------
 
-local function special_pcall_xpcall(self: NodeChecker, node: Node, a: FunctionType, b: TupleType, argdelta?: integer): Type
+local function special_pcall_xpcall(self: NodeChecker, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidType | TupleType
+   assert(a is FunctionType)
    local isx = a.special_function_handler == "xpcall"
    local base_nargs = isx and 2 or 1
    local bool = a_type(node, "boolean", {})

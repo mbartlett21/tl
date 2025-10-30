@@ -290,10 +290,10 @@ local parse_argument_list: function(ParseState, integer): integer, Node, integer
 local parse_argument_type_list: function(ParseState, integer): integer, TupleType, boolean, integer
 local parse_type: function(ParseState, integer): integer, FirstClassType, integer
 local parse_type_declaration: function(ps: ParseState, i: integer, node_name: NodeKind): integer, Node
-local parse_interface_name: function(ps: ParseState, i: integer): integer, Type, integer
+local parse_interface_name: function(ps: ParseState, i: integer): integer, NominalType, integer
 
 local type ParseBody = function(ps: ParseState, i: integer, def: Type): integer, boolean
-local parse_enum_body: function(ps: ParseState, i: integer, def: EnumType): integer, boolean
+local parse_enum_body: function(ps: ParseState, i: integer, def: Type): integer, boolean
 local parse_record_body: function(ps: ParseState, i: integer, def: Type): integer, boolean
 local parse_type_body_fns: {BodyTypeName:ParseBody}
 
@@ -1386,7 +1386,7 @@ local function parse_argument_type(ps: ParseState, i: integer): integer, Argumen
    return i, { i = i, type = typ, is_va = is_va, is_self = is_self, opt = (opt > 0) or is_va }, 0
 end
 
-parse_argument_type_list = function(ps: ParseState, i: integer): integer, Type, boolean, integer
+parse_argument_type_list = function(ps: ParseState, i: integer): integer, TupleType, boolean, integer
    local ars: {ArgumentInfo} = {}
    i = parse_bracket_list(ps, i, ars, "(", ")", "sep", parse_argument_type)
    local t, list = new_tuple(ps, i)
@@ -1799,7 +1799,8 @@ local function parse_nested_type(ps: ParseState, i: integer, def: RecordLikeType
    return i
 end
 
-parse_enum_body = function(ps: ParseState, i: integer, def: EnumType): integer, boolean
+parse_enum_body = function(ps: ParseState, i: integer, def: Type): integer, boolean
+   assert(def is EnumType)
    def.enumset = {}
    while ps.tokens[i].tk ~= "$EOF$" and ps.tokens[i].tk ~= "end" do
       local item: Node
@@ -1885,7 +1886,7 @@ local function parse_where_clause(ps: ParseState, i: integer, def: RecordLikeTyp
    return i, node
 end
 
-parse_interface_name = function(ps: ParseState, i: integer): integer, FirstOrderType, integer
+parse_interface_name = function(ps: ParseState, i: integer): integer, NominalType, integer
    local istart = i
    local typ: FirstOrderType
    i, typ = parse_simple_type_or_nominal(ps, i)
@@ -1939,7 +1940,8 @@ local function extract_userdata_from_interface_list(ps: ParseState, i: integer, 
    end
 end
 
-parse_record_body = function(ps: ParseState, i: integer, def: RecordLikeType): integer, boolean
+parse_record_body = function(ps: ParseState, i: integer, def: Type): integer, boolean
+   assert(def is RecordType or def is InterfaceType)
    def.fields = {}
    def.field_order = {}
 

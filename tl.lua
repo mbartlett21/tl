@@ -846,6 +846,7 @@ do
 
    local resolve_typevar_fns = {
       ["typevar"] = function(s, t)
+         assert(t.typename == "typevar")
          local rt = s.ctx:find_var_type(t.typevar)
          if not rt then
             return t, false
@@ -882,7 +883,7 @@ do
       end
 
       if rt.typename == "generic" then
-         rt = clear_resolved_typeargs(rt, state.resolved)
+         return clear_resolved_typeargs(rt, state.resolved)
       end
 
       return rt
@@ -1917,6 +1918,7 @@ function Context:resolve_self(t, resolve_interface)
    if (resolve_interface and checktype.typename == "interface") or checktype.typename == "record" then
       return types.map(self, t, {
          ["self"] = function(_, typ)
+            assert(typ.typename == "self")
             return typedecl_to_nominal(typ, checktype.declname, selfdecl)
          end,
       })
@@ -2883,7 +2885,7 @@ end
 
 -- module teal.check.relations from teal/check/relations.lua
 package.preload["teal.check.relations"] = function(...)
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local errors = require("teal.errors")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pairs = _tl_compat and _tl_compat.pairs or pairs; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; local errors = require("teal.errors")
 
 
 local types = require("teal.types")
@@ -3021,6 +3023,8 @@ local function compare_or_infer_typevar(ck, typevar, a, b, cmp)
 end
 
 local function subtype_record(ck, a, b)
+   assert(a.typename == "record")
+   assert(b.fields)
    if a.elements and b.elements then
       if not ck:is_a(a.elements, b.elements) then
          return false, { errors.new("array parts have incompatible element types") }
@@ -3056,6 +3060,8 @@ local function subtype_record(ck, a, b)
 end
 
 local function eqtype_record(ck, a, b)
+   assert(a.typename == "record")
+   assert(b.typename == "record")
 
    if (a.elements ~= nil) ~= (b.elements ~= nil) then
       return false, { errors.new("types do not have the same array interface") }
@@ -3080,11 +3086,14 @@ end
 
 
 local function compare_true_inferring_emptytable(ck, a, b)
+   assert(b.typename == "emptytable")
    ck:infer_emptytable(b, ck:infer_at(b, a))
    return true
 end
 
 local function compare_true_inferring_emptytable_if_not_userdata(ck, a, b)
+   assert(a.fields)
+   assert(b.typename == "emptytable")
    if a.is_userdata then
       return false, { types.error("{} cannot be used with userdata type %s", a) }
    end
@@ -3170,6 +3179,8 @@ do
    end
 
    are_same_nominals = function(ck, t1, t2)
+      assert(t1.typename == "nominal")
+      assert(t2.typename == "nominal")
       local t1f = nominal_found_type(ck, t1)
       local t2f = nominal_found_type(ck, t2)
       if (not t1f or not t2f) then
@@ -3231,9 +3242,11 @@ local emptytable_relations = {
    ["map"] = compare_true,
    ["tupletable"] = compare_true,
    ["interface"] = function(_ck, _a, b)
+      assert(b.typename == "interface")
       return not b.is_userdata
    end,
    ["record"] = function(_ck, _a, b)
+      assert(b.typename == "record")
       return not b.is_userdata
    end,
 }
@@ -3241,6 +3254,8 @@ local emptytable_relations = {
 relations.eqtype_relations = {
    ["typevar"] = {
       ["typevar"] = function(ck, a, b)
+         assert(a.typename == "typevar")
+         assert(b.typename == "typevar")
          if a.typevar == b.typevar then
             return true
          end
@@ -3248,12 +3263,15 @@ relations.eqtype_relations = {
          return compare_or_infer_typevar(ck, b.typevar, a, nil, ck.same_type)
       end,
       ["*"] = function(ck, a, b)
+         assert(a.typename == "typevar")
          return compare_or_infer_typevar(ck, a.typevar, nil, b, ck.same_type)
       end,
    },
    ["emptytable"] = emptytable_relations,
    ["tupletable"] = {
       ["tupletable"] = function(ck, a, b)
+         assert(a.typename == "tupletable")
+         assert(b.typename == "tupletable")
          for i = 1, math.min(#a.types, #b.types) do
             if not ck:same_type(a.types[i], b.types[i]) then
                return false, { types.error("in tuple entry " .. tostring(i) .. ": got %s, expected %s", a.types[i], b.types[i]) }
@@ -3268,18 +3286,24 @@ relations.eqtype_relations = {
    },
    ["array"] = {
       ["array"] = function(ck, a, b)
+         assert(a.typename == "array")
+         assert(b.typename == "array")
          return ck:same_type(a.elements, b.elements)
       end,
       ["emptytable"] = compare_true_inferring_emptytable,
    },
    ["map"] = {
       ["map"] = function(ck, a, b)
+         assert(a.typename == "map")
+         assert(b.typename == "map")
          return compare_map(ck, a.keys, b.keys, a.values, b.values, true)
       end,
       ["emptytable"] = compare_true_inferring_emptytable,
    },
    ["union"] = {
       ["union"] = function(ck, a, b)
+         assert(a.typename == "union")
+         assert(b.typename == "union")
          return (has_all_types_of(ck, a.types, b.types) and
          has_all_types_of(ck, b.types, a.types))
       end,
@@ -3287,6 +3311,8 @@ relations.eqtype_relations = {
    ["nominal"] = {
       ["nominal"] = are_same_nominals,
       ["typedecl"] = function(ck, a, b)
+         assert(a.typename == "nominal")
+         assert(b.typename == "typedecl")
 
          return ck:same_type(ck:resolve_nominal(a), b.def)
       end,
@@ -3297,12 +3323,16 @@ relations.eqtype_relations = {
    },
    ["interface"] = {
       ["interface"] = function(_ck, a, b)
+         assert(a.typename == "interface")
+         assert(b.typename == "interface")
          return a.typeid == b.typeid
       end,
       ["emptytable"] = compare_true_inferring_emptytable_if_not_userdata,
    },
    ["function"] = {
       ["function"] = function(ck, a, b)
+         assert(a.typename == "function")
+         assert(b.typename == "function")
          local argdelta = a.is_method and 1 or 0
          local naargs, nbargs = #a.args.tuple, #b.args.tuple
          if naargs ~= nbargs then
@@ -3327,9 +3357,12 @@ relations.eqtype_relations = {
    },
    ["self"] = {
       ["self"] = function(_ck, _a, _b)
+         assert(_a.typename == "self")
+         assert(_b.typename == "self")
          return true
       end,
       ["*"] = function(ck, a, b)
+         assert(a.typename == "self")
          return ck:same_type(ck:type_of_self(a), b)
       end,
    },
@@ -3338,6 +3371,8 @@ relations.eqtype_relations = {
    },
    ["generic"] = {
       ["generic"] = function(ck, a, b)
+         assert(a.typename == "generic")
+         assert(b.typename == "generic")
          if #a.typeargs ~= #b.typeargs then
             return false
          end
@@ -3352,9 +3387,11 @@ relations.eqtype_relations = {
    ["*"] = {
       ["boolean_context"] = compare_true,
       ["self"] = function(ck, a, b)
+         assert(b.typename == "self")
          return ck:same_type(a, (ck:type_of_self(b)))
       end,
       ["typevar"] = function(ck, a, b)
+         assert(b.typename == "typevar")
          return compare_or_infer_typevar(ck, b.typevar, a, nil, ck.same_type)
       end,
    },
@@ -3390,6 +3427,8 @@ local function subtype_nominal(ck, a, b)
 end
 
 local function subtype_array(ck, a, b)
+   assert(a.elements or a.fields)
+   assert(b.elements)
    if (not a.elements) or (not ck:is_a(a.elements, b.elements)) then
       return false
    end
@@ -3410,6 +3449,11 @@ relations.subtype_relations = {
    },
    ["tuple"] = {
       ["tuple"] = function(ck, a, b)
+
+
+
+         assert(a.typename == "tuple")
+         assert(b.typename == "tuple")
          local at, bt = a.tuple, b.tuple
          if #at ~= #bt then
             return false
@@ -3427,6 +3471,8 @@ relations.subtype_relations = {
    },
    ["typevar"] = {
       ["typevar"] = function(ck, a, b)
+         assert(a.typename == "typevar")
+         assert(b.typename == "typevar")
          if a.typevar == b.typevar then
             return true
          end
@@ -3434,11 +3480,14 @@ relations.subtype_relations = {
          return compare_or_infer_typevar(ck, b.typevar, a, nil, ck.is_a)
       end,
       ["*"] = function(ck, a, b)
+         assert(a.typename == "typevar")
          return compare_or_infer_typevar(ck, a.typevar, nil, b, ck.is_a)
       end,
    },
    ["union"] = {
       ["nominal"] = function(ck, a, b)
+         assert(a.typename == "union")
+         assert(b.typename == "nominal")
 
          local rb = ck:resolve_nominal(b)
          if rb.typename == "union" then
@@ -3448,6 +3497,11 @@ relations.subtype_relations = {
          return forall_are_subtype_of(ck, a, b)
       end,
       ["union"] = function(ck, a, b)
+
+
+
+         assert(a.typename == "union")
+         assert(b.typename == "union")
          local used = {}
          for _, t in ipairs(a.types) do
             ck:begin_implied_scope()
@@ -3472,6 +3526,7 @@ relations.subtype_relations = {
 
 
       ["*"] = function(ck, a, b)
+         assert(a.typename == "poly")
          if exists_supertype_in(ck, b, a) then
             return true
          end
@@ -3480,6 +3535,8 @@ relations.subtype_relations = {
    },
    ["nominal"] = {
       ["nominal"] = function(ck, a, b)
+         assert(a.typename == "nominal")
+         assert(b.typename == "nominal")
          local ok, errs = are_same_nominals(ck, a, b)
          if ok then
             return true
@@ -3504,6 +3561,8 @@ relations.subtype_relations = {
          return ok, errs
       end,
       ["union"] = function(ck, a, b)
+         assert(a.typename == "nominal")
+         assert(b.typename == "union")
 
          local ra = ck:resolve_nominal(a)
          if ra.typename == "union" then
@@ -3519,6 +3578,8 @@ relations.subtype_relations = {
    },
    ["string"] = {
       ["enum"] = function(_ck, a, b)
+         assert(a.typename == "string")
+         assert(b.typename == "enum")
          if not a.literal then
             return false, { types.error("%s is not a %s", a, b) }
          end
@@ -3535,6 +3596,8 @@ relations.subtype_relations = {
    },
    ["interface"] = {
       ["interface"] = function(ck, a, b)
+         assert(a.typename == "interface")
+         assert(b.typename == "interface")
          if is_in_interface_list(ck, a, b) then
             return true
          end
@@ -3549,6 +3612,8 @@ relations.subtype_relations = {
    ["emptytable"] = emptytable_relations,
    ["tupletable"] = {
       ["tupletable"] = function(ck, a, b)
+         assert(a.typename == "tupletable")
+         assert(b.typename == "tupletable")
          for i = 1, math.min(#a.types, #b.types) do
             if not ck:is_a(a.types[i], b.types[i]) then
                return false, { types.error("in tuple entry " ..
@@ -3562,11 +3627,14 @@ a.types[i], b.types[i]), }
          return true
       end,
       ["record"] = function(ck, a, b)
+         assert(b.typename == "record")
          if b.elements then
             return relations.subtype_relations["tupletable"]["array"](ck, a, b)
          end
       end,
       ["array"] = function(ck, a, b)
+         assert(a.typename == "tupletable")
+         assert(b.typename == "array")
          if b.inferred_len and b.inferred_len > #a.types then
             return false, { errors.new("incompatible length, expected maximum length of " .. tostring(#a.types) .. ", got " .. tostring(b.inferred_len)) }
          end
@@ -3580,6 +3648,8 @@ a.types[i], b.types[i]), }
          return true
       end,
       ["map"] = function(ck, a, b)
+         assert(a.typename == "tupletable")
+         assert(b.typename == "map")
          local aa = ck:arraytype_from_tuple(a.inferred_at or a, a)
          if not aa then
             return false, { types.error("Unable to convert tuple %s to map", a) }
@@ -3592,6 +3662,8 @@ a.types[i], b.types[i]), }
    ["record"] = {
       ["record"] = subtype_record,
       ["interface"] = function(ck, a, b)
+         assert(a.typename == "record")
+         assert(b.typename == "interface")
          if is_in_interface_list(ck, a, b) then
             return true
          end
@@ -3602,6 +3674,8 @@ a.types[i], b.types[i]), }
       end,
       ["array"] = subtype_array,
       ["map"] = function(ck, a, b)
+         assert(a.typename == "record")
+         assert(b.typename == "map")
          if not ck:is_a(b.keys, a_type(b, "string", {})) then
             return false, { errors.new("can't match a record to a map with non-string keys") }
          end
@@ -3619,6 +3693,7 @@ a.types[i], b.types[i]), }
          return true
       end,
       ["tupletable"] = function(ck, a, b)
+         assert(a.typename == "record")
          if a.elements then
             return relations.subtype_relations["array"]["tupletable"](ck, a, b)
          end
@@ -3628,14 +3703,20 @@ a.types[i], b.types[i]), }
    ["array"] = {
       ["array"] = subtype_array,
       ["record"] = function(ck, a, b)
+         assert(a.typename == "array")
+         assert(b.typename == "record")
          if b.elements then
             return subtype_array(ck, a, b)
          end
       end,
       ["map"] = function(ck, a, b)
+         assert(a.typename == "array")
+         assert(b.typename == "map")
          return compare_map(ck, a_type(a, "integer", {}), b.keys, a.elements, b.values)
       end,
       ["tupletable"] = function(ck, a, b)
+         assert(a.typename == "array")
+         assert(b.typename == "tupletable")
          local alen = a.inferred_len or 0
          if alen > #b.types then
             return false, { errors.new("incompatible length, expected maximum length of " .. tostring(#b.types) .. ", got " .. tostring(alen)) }
@@ -3654,20 +3735,28 @@ a.types[i], b.types[i]), }
    },
    ["map"] = {
       ["map"] = function(ck, a, b)
+         assert(a.typename == "map")
+         assert(b.typename == "map")
          return compare_map(ck, a.keys, b.keys, a.values, b.values)
       end,
       ["array"] = function(ck, a, b)
+         assert(a.typename == "map")
+         assert(b.typename == "array")
          return compare_map(ck, a.keys, a_type(b, "integer", {}), a.values, b.elements)
       end,
       ["emptytable"] = compare_true_inferring_emptytable,
    },
    ["typedecl"] = {
       ["*"] = function(ck, a, b)
+         assert(a.typename == "typedecl")
+         assert(b.typename == "record")
          return ck:is_a(a.def, b)
       end,
    },
    ["function"] = {
       ["function"] = function(ck, a, b)
+         assert(a.typename == "function")
+         assert(b.typename == "function")
          local errs = {}
 
          local aa, ba = a.args.tuple, b.args.tuple
@@ -3702,17 +3791,23 @@ a.types[i], b.types[i]), }
    },
    ["self"] = {
       ["self"] = function(_ck, _a, _b)
+         assert(_a.typename == "self")
+         assert(_b.typename == "self")
          return true
       end,
       ["*"] = function(ck, a, b)
+         assert(a.typename == "self")
          return ck:is_a(ck:type_of_self(a), b)
       end,
    },
    ["typearg"] = {
       ["typearg"] = function(_ck, a, b)
+         assert(a.typename == "typearg")
+         assert(b.typename == "typearg")
          return a.typearg == b.typearg
       end,
       ["*"] = function(ck, a, b)
+         assert(a.typename == "typearg")
          if a.constraint then
             return ck:is_a(a.constraint, b)
          end
@@ -3723,6 +3818,7 @@ a.types[i], b.types[i]), }
    },
    ["generic"] = {
       ["*"] = function(ck, a, b)
+         assert(a.typename == "generic")
 
 
          local aa = ck:apply_generic(a, a)
@@ -3735,13 +3831,16 @@ a.types[i], b.types[i]), }
       ["any"] = compare_true,
       ["boolean_context"] = compare_true,
       ["emptytable"] = function(_ck, a, _b)
+         assert(_b.typename == "emptytable")
          return false, { types.error("assigning %s to a variable declared with {}", a) }
       end,
       ["unresolved_emptytable_value"] = function(ck, a, b)
+         assert(b.typename == "unresolved_emptytable_value")
          ck:infer_emptytable_from_unresolved_value(b, b, a)
          return true
       end,
       ["generic"] = function(ck, a, b)
+         assert(b.typename == "generic")
 
 
          local bb = ck:apply_generic(b, b)
@@ -3750,6 +3849,7 @@ a.types[i], b.types[i]), }
          return ok, errs
       end,
       ["self"] = function(ck, a, b)
+         assert(b.typename == "self")
          return ck:is_a(a, (ck:type_of_self(b)))
       end,
       ["tuple"] = function(ck, a, b)
@@ -3757,12 +3857,15 @@ a.types[i], b.types[i]), }
          return ck:is_a(tuple, b)
       end,
       ["typedecl"] = function(ck, a, b)
+         assert(b.typename == "typedecl")
          return ck:is_a(a, b.def)
       end,
       ["typevar"] = function(ck, a, b)
+         assert(b.typename == "typevar")
          return compare_or_infer_typevar(ck, b.typevar, a, nil, ck.is_a)
       end,
       ["typearg"] = function(ck, a, b)
+         assert(b.typename == "typearg")
          if b.constraint then
             return ck:is_a(a, b.constraint)
          end
@@ -3776,6 +3879,7 @@ a.types[i], b.types[i]), }
 
 
       ["poly"] = function(ck, a, b)
+         assert(b.typename == "poly")
          for _, t in ipairs(b.types) do
             if not ck:is_a(a, t) then
                return false, { errors.new("cannot match against all alternatives of the polymorphic type") }
@@ -4081,6 +4185,7 @@ local is_unknown = types.is_unknown
 
 
 local function special_pcall_xpcall(self, node, a, b, argdelta)
+   assert(a.typename == "function")
    local isx = a.special_function_handler == "xpcall"
    local base_nargs = isx and 2 or 1
    local bool = a_type(node, "boolean", {})
@@ -4774,7 +4879,6 @@ local TL_DEBUG = tldebug.TL_DEBUG
 
 
 local types = require("teal.types")
-
 
 
 
@@ -6045,7 +6149,8 @@ visit_node.cbs = {
             end
          end
       end,
-      after = function(self, node, children)
+      after = function(self, node, children_)
+         local children = children_
          self.fdb:set_truthy(node)
 
          if not node.expected then
@@ -7149,16 +7254,19 @@ local metamethod_is_method = {
 visit_type.cbs = {
    ["generic"] = {
       before = function(self, typ)
+         assert(typ.typename == "generic")
          self:begin_implied_scope()
          self:add_var(nil, "@generic", typ)
       end,
       after = function(self, typ, _children)
+         assert(typ.typename == "generic")
          self:end_implied_scope()
          return self:fresh_typeargs(typ)
       end,
    },
    ["function"] = {
       after = function(self, typ, _children)
+         assert(typ.typename == "function")
          if self.feat_arity == false then
             typ.min_arity = 0
          end
@@ -7167,10 +7275,12 @@ visit_type.cbs = {
    },
    ["record"] = {
       before = function(self, typ)
+         assert(typ.fields)
          self:begin_implied_scope()
          self:begin_temporary_record_types(typ)
       end,
       after = function(self, typ, children)
+         assert(typ.fields)
          local i = 1
          if typ.interface_list then
             for j, _ in ipairs(typ.interface_list) do
@@ -7264,6 +7374,7 @@ visit_type.cbs = {
    },
    ["typearg"] = {
       after = function(self, typ, _children)
+         assert(typ.typename == "typearg")
          local name = typ.typearg
          local old = self:find_var(name, "check_only")
          if old then
@@ -7282,6 +7393,7 @@ visit_type.cbs = {
    },
    ["typevar"] = {
       after = function(self, typ, _children)
+         assert(typ.typename == "typevar")
          if not self:find_var_type(typ.typevar) then
             self.errs:add(typ, "undefined type variable " .. typ.typevar)
          end
@@ -7290,6 +7402,7 @@ visit_type.cbs = {
    },
    ["nominal"] = {
       after = function(self, typ, _children)
+         assert(typ.typename == "nominal")
          if typ.found then
             return typ
          end
@@ -7326,6 +7439,7 @@ visit_type.cbs = {
    },
    ["union"] = {
       after = function(self, typ, _children)
+         assert(typ.typename == "union")
          local _, err = is_valid_union(typ)
          if err then
             return self.errs:invalid_at(typ, err, typ)
@@ -12411,6 +12525,7 @@ local function parse_nested_type(ps, i, def, tn)
 end
 
 parse_enum_body = function(ps, i, def)
+   assert(def.typename == "enum")
    def.enumset = {}
    while ps.tokens[i].tk ~= "$EOF$" and ps.tokens[i].tk ~= "end" do
       local item
@@ -12551,6 +12666,7 @@ local function extract_userdata_from_interface_list(ps, i, def)
 end
 
 parse_record_body = function(ps, i, def)
+   assert(def.typename == "record" or def.typename == "interface")
    def.fields = {}
    def.field_order = {}
 
@@ -13376,6 +13492,7 @@ end
 local recurse_type
 
 local function aggregate_type_walker(s, ast, visit)
+   assert(ast.types)
    local xs = {}
    for i, child in ipairs(ast.types) do
       xs[i] = recurse_type(s, child, visit)
@@ -13384,6 +13501,7 @@ local function aggregate_type_walker(s, ast, visit)
 end
 
 local function record_like_type_walker(s, ast, visit)
+   assert(ast.fields)
    local xs = {}
    if ast.interface_list then
       for _, child in ipairs(ast.interface_list) do
@@ -13430,6 +13548,7 @@ local type_walkers = {
    ["*"] = false,
 
    ["generic"] = function(s, ast, visit)
+      assert(ast.typename == "generic")
       local xs = {}
       for _, child in ipairs(ast.typeargs) do
          table.insert(xs, recurse_type(s, child, visit))
@@ -13438,6 +13557,7 @@ local type_walkers = {
       return xs
    end,
    ["tuple"] = function(s, ast, visit)
+      assert(ast.typename == "tuple")
       local xs = {}
       for i, child in ipairs(ast.tuple) do
          xs[i] = recurse_type(s, child, visit)
@@ -13448,6 +13568,7 @@ local type_walkers = {
    ["tupletable"] = aggregate_type_walker,
    ["poly"] = aggregate_type_walker,
    ["map"] = function(s, ast, visit)
+      assert(ast.typename == "map")
       return {
          recurse_type(s, ast.keys, visit),
          recurse_type(s, ast.values, visit),
@@ -13456,6 +13577,7 @@ local type_walkers = {
    ["record"] = record_like_type_walker,
    ["interface"] = record_like_type_walker,
    ["function"] = function(s, ast, visit)
+      assert(ast.typename == "function")
       local xs = {}
       if ast.args then
          for _, child in ipairs(ast.args.tuple) do
@@ -13470,6 +13592,7 @@ local type_walkers = {
       return xs
    end,
    ["nominal"] = function(s, ast, visit)
+      assert(ast.typename == "nominal")
       local xs = {}
       if ast.typevals then
          for _, child in ipairs(ast.typevals) do
@@ -13479,22 +13602,26 @@ local type_walkers = {
       return xs
    end,
    ["typearg"] = function(s, ast, visit)
+      assert(ast.typename == "typearg")
       return {
          ast.constraint and recurse_type(s, ast.constraint, visit),
       }
    end,
    ["array"] = function(s, ast, visit)
+      assert(ast.typename == "array")
       return {
          recurse_type(s, ast.elements, visit),
       }
    end,
    ["literal_table_item"] = function(s, ast, visit)
+      assert(ast.typename == "literal_table_item")
       return {
          recurse_type(s, ast.ktype, visit),
          recurse_type(s, ast.vtype, visit),
       }
    end,
    ["typedecl"] = function(s, ast, visit)
+      assert(ast.typename == "typedecl")
       return {
          recurse_type(s, ast.def, visit),
       }
@@ -13775,6 +13902,7 @@ function traversal.traverse_nodes(s, root,
    local visit_after = visit_node.after
 
    recurse = function(ast)
+      assert(ast.kind ~= nil)
       local xs = {}
       local kind = assert(ast.kind)
       local kprint
@@ -15816,6 +15944,7 @@ do
 
    local fresh_typevar_fns = {
       ["typevar"] = function(typeargs, t, resolve)
+         assert(t.typename == "typevar")
          for _, ta in ipairs(typeargs) do
             if ta.typearg == t.typevar then
                return a_type(t, "typevar", {
@@ -15827,6 +15956,7 @@ do
          return t, false
       end,
       ["typearg"] = function(typeargs, t, resolve)
+         assert(t.typename == "typearg")
          for _, ta in ipairs(typeargs) do
             if ta.typearg == t.typearg then
                return a_type(t, "typearg", {

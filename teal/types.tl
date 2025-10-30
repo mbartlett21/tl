@@ -1062,7 +1062,8 @@ do
 
    local type ResolveFunction = function<T is Type>(t: T, all_same: boolean): T, boolean
    local fresh_typevar_fns: types.TypeFunctionMap<{TypeArgType}> = {
-      ["typevar"] = function(typeargs: {TypeArgType}, t: TypeVarType, resolve: ResolveFunction<Type>): Type, boolean
+      ["typevar"] = function(typeargs: {TypeArgType}, t: Type, resolve: ResolveFunction<Type>): Type, boolean
+         assert(t is TypeVarType)
          for _, ta in ipairs(typeargs) do
             if ta.typearg == t.typevar then
                return a_type(t, "typevar", {
@@ -1073,7 +1074,8 @@ do
          end
          return t, false
       end,
-      ["typearg"] = function(typeargs: {TypeArgType}, t: TypeArgType, resolve: ResolveFunction<Type>): Type, boolean
+      ["typearg"] = function(typeargs: {TypeArgType}, t: Type, resolve: ResolveFunction<Type>): Type, boolean
+         assert(t is TypeArgType)
          for _, ta in ipairs(typeargs) do
             if ta.typearg == t.typearg then
                return a_type(t, "typearg", {

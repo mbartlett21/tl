@@ -17,6 +17,7 @@ if not ("\0"):match("%z") then
 end
 
 local function json_escape(s)
+   assert(type(s) == "string")
    return "\\u" .. string.format("%04x", s:byte())
 end
 

@@ -395,6 +395,7 @@ do
 
    local resolve_typevar_fns = {
       ["typevar"] = function(s, t)
+         assert(t.typename == "typevar")
          local rt = s.ctx:find_var_type(t.typevar)
          if not rt then
             return t, false
@@ -431,7 +432,7 @@ do
       end
 
       if rt.typename == "generic" then
-         rt = clear_resolved_typeargs(rt, state.resolved)
+         return clear_resolved_typeargs(rt, state.resolved)
       end
 
       return rt
@@ -1466,6 +1467,7 @@ function Context:resolve_self(t, resolve_interface)
    if (resolve_interface and checktype.typename == "interface") or checktype.typename == "record" then
       return types.map(self, t, {
          ["self"] = function(_, typ)
+            assert(typ.typename == "self")
             return typedecl_to_nominal(typ, checktype.declname, selfdecl)
          end,
       })

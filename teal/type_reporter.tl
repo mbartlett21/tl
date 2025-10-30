@@ -511,7 +511,7 @@ end
 
 function TypeReport:symbols_in_scope(filename: string, y: integer, x: integer): {string:integer}
    local function find(symbols: {TypeReport.Symbol}, at_y: integer, at_x: integer): integer
-      local function le(a: {integer, integer}, b: {integer, integer}): boolean
+      local function le(a: TypeReport.Symbol, b: {integer, integer}): boolean
          return a[1] < b[1]
             or (a[1] == b[1] and a[2] <= b[2])
       end

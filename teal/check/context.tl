@@ -394,7 +394,8 @@ do
    end
 
    local resolve_typevar_fns: types.TypeFunctionMap<ResolveTypeVarState> = {
-      ["typevar"] = function(s: ResolveTypeVarState, t: TypeVarType): Type, boolean
+      ["typevar"] = function(s: ResolveTypeVarState, t: Type): Type, boolean
+         assert(t is TypeVarType)
          local rt = s.ctx:find_var_type(t.typevar)
          if not rt then
             return t, false
@@ -407,7 +408,7 @@ do
       end,
    }
 
-   local function clear_resolved_typeargs(copy: GenericType, resolved: {string:Type}): Type
+   local function clear_resolved_typeargs(copy: GenericType, resolved: {string:Type}): FirstClassType
       for i = #copy.typeargs, 1, -1 do
          local r = resolved[copy.typeargs[i].typearg]
          if r then
@@ -431,7 +432,7 @@ do
       end
 
       if rt is GenericType then
-         rt = clear_resolved_typeargs(rt, state.resolved)
+         return clear_resolved_typeargs(rt, state.resolved)
       end
 
       return rt as FirstClassType
@@ -1465,7 +1466,8 @@ function Context:resolve_self(t: Type, resolve_interface?: boolean): Type, {Erro
 
    if (resolve_interface and checktype is InterfaceType) or checktype is RecordType then
       return types.map(self, t, {
-         ["self"] = function(_: Context, typ: SelfType): Type, boolean
+         ["self"] = function(_: Context, typ: Type): Type, boolean
+            assert(typ is SelfType)
             return typedecl_to_nominal(typ, checktype.declname, selfdecl)
          end,
       })
@@ -1547,7 +1549,7 @@ do
    end
 end
 
-function Context:begin_temporary_record_types(typ: RecordType)
+function Context:begin_temporary_record_types(typ: RecordLikeType)
    self:add_self_type(typ, typ)
 
    for fname, ftype in fields_of(typ) do
@@ -1562,7 +1564,7 @@ function Context:begin_temporary_record_types(typ: RecordType)
    end
 end
 
-function Context:end_temporary_record_types(typ: RecordType)
+function Context:end_temporary_record_types(typ: RecordLikeType)
    -- drop @self and nested records from scope
    -- to avoid closing them prematurely in end_scope()
    local scope = self.st[#self.st]

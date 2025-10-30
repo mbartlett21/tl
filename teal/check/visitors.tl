@@ -40,7 +40,6 @@ local type UnionType = types.UnionType
 local type TupleTableType = types.TupleTableType
 local type PolyType = types.PolyType
 local type EnumType = types.EnumType
-local type FirstClassType = types.FirstClassType
 local type TypeName = types.TypeName
 local a_type = types.a_type
 local a_function = types.a_function
@@ -431,7 +430,7 @@ local function convert_is_of_union_to_or_of_is(self: Context, node: Node, v: Typ
    return not not has_any
 end
 
-local function flat_tuple(w: Where, vt: {FirstClassType | TupleType}): TupleType
+local function flat_tuple(w: Where, vt: {Type}): TupleType
    local n_vals = #vt
    local ret = a_tuple(w, {})
    local rt = ret.tuple
@@ -1227,7 +1226,7 @@ visit_node.cbs = {
       end,
    },
    ["variable_list"] = {
-      after = function(self: Context, node: Node, children: {FirstClassType | TupleType}): Type
+      after = function(self: Context, node: Node, children: {Type}): Type
          local tuple = flat_tuple(node, children)
 
          for i, t in ipairs(tuple.tuple) do
@@ -1282,7 +1281,8 @@ visit_node.cbs = {
             end
          end
       end,
-      after = function(self: Context, node: Node, children: {LiteralTableItemType}): Type
+      after = function(self: Context, node: Node, children_: {Type}): Type
+         local children = children_ as {LiteralTableItemType}
          self.fdb:set_truthy(node)
 
          if not node.expected then
@@ -2385,17 +2385,20 @@ local metamethod_is_method: {string: boolean} = {
 
 visit_type.cbs = {
    ["generic"] = {
-      before = function(self: Context, typ: GenericType)
+      before = function(self: Context, typ: Type)
+         assert(typ is GenericType)
          self:begin_implied_scope()
          self:add_var(nil, "@generic", typ)
       end,
-      after = function(self: Context, typ: GenericType, _children: {Type}): Type
+      after = function(self: Context, typ: Type, _children: {Type}): Type
+         assert(typ is GenericType)
          self:end_implied_scope()
          return self:fresh_typeargs(typ)
       end,
    },
    ["function"] = {
-      after = function(self: Context, typ: FunctionType, _children: {Type}): Type
+      after = function(self: Context, typ: Type, _children: {Type}): Type
+         assert(typ is FunctionType)
          if self.feat_arity == false then
             typ.min_arity = 0
          end
@@ -2403,11 +2406,13 @@ visit_type.cbs = {
       end
    },
    ["record"] = {
-      before = function(self: Context, typ: RecordType)
+      before = function(self: Context, typ: Type)
+         assert(typ is RecordLikeType)
          self:begin_implied_scope()
          self:begin_temporary_record_types(typ)
       end,
-      after = function(self: Context, typ: RecordType, children: {Type}): Type
+      after = function(self: Context, typ: Type, children: {Type}): Type
+         assert(typ is RecordLikeType)
          local i = 1
          if typ.interface_list then
             for j, _ in ipairs(typ.interface_list) do
@@ -2500,7 +2505,8 @@ visit_type.cbs = {
       end,
    },
    ["typearg"] = {
-      after = function(self: Context, typ: TypeArgType, _children: {Type}): Type
+      after = function(self: Context, typ: Type, _children: {Type}): Type
+         assert(typ is TypeArgType)
          local name = typ.typearg
          local old <const> = self:find_var(name, "check_only")
          if old then
@@ -2518,7 +2524,8 @@ visit_type.cbs = {
       end,
    },
    ["typevar"] = {
-      after = function(self: Context, typ: TypeVarType, _children: {Type}): Type
+      after = function(self: Context, typ: Type, _children: {Type}): Type
+         assert(typ is TypeVarType)
          if not self:find_var_type(typ.typevar) then
             self.errs:add(typ, "undefined type variable " .. typ.typevar)
          end
@@ -2526,7 +2533,8 @@ visit_type.cbs = {
       end,
    },
    ["nominal"] = {
-      after = function(self: Context, typ: NominalType, _children: {Type}): Type
+      after = function(self: Context, typ: Type, _children: {Type}): Type
+         assert(typ is NominalType)
          if typ.found then
             return typ
          end
@@ -2562,7 +2570,8 @@ visit_type.cbs = {
       end,
    },
    ["union"] = {
-      after = function(self: Context, typ: UnionType, _children: {Type}): Type
+      after = function(self: Context, typ: Type, _children: {Type}): Type
+         assert(typ is UnionType)
          local _, err = is_valid_union(typ)
          if err then
             return self.errs:invalid_at(typ, err, typ)

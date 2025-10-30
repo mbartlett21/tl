@@ -1063,6 +1063,7 @@ do
 
    local fresh_typevar_fns = {
       ["typevar"] = function(typeargs, t, resolve)
+         assert(t.typename == "typevar")
          for _, ta in ipairs(typeargs) do
             if ta.typearg == t.typevar then
                return a_type(t, "typevar", {
@@ -1074,6 +1075,7 @@ do
          return t, false
       end,
       ["typearg"] = function(typeargs, t, resolve)
+         assert(t.typename == "typearg")
          for _, ta in ipairs(typeargs) do
             if ta.typearg == t.typearg then
                return a_type(t, "typearg", {

@@ -1800,6 +1800,7 @@ local function parse_nested_type(ps, i, def, tn)
 end
 
 parse_enum_body = function(ps, i, def)
+   assert(def.typename == "enum")
    def.enumset = {}
    while ps.tokens[i].tk ~= "$EOF$" and ps.tokens[i].tk ~= "end" do
       local item
@@ -1940,6 +1941,7 @@ local function extract_userdata_from_interface_list(ps, i, def)
 end
 
 parse_record_body = function(ps, i, def)
+   assert(def.typename == "record" or def.typename == "interface")
    def.fields = {}
    def.field_order = {}
 

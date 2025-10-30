@@ -83,7 +83,8 @@ end
 
 local recurse_type: function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): T
 
-local function aggregate_type_walker<S, T>(s: S, ast: AggregateType, visit: Visitor<S, TypeName, Type, T>): {T}
+local function aggregate_type_walker<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): {T}
+   assert(ast is AggregateType)
    local xs: {T} = {}
    for i, child in ipairs(ast.types) do
       xs[i] = recurse_type(s, child, visit)
@@ -91,7 +92,8 @@ local function aggregate_type_walker<S, T>(s: S, ast: AggregateType, visit: Visi
    return xs
 end
 
-local function record_like_type_walker<S, T>(s: S, ast: RecordLikeType, visit: Visitor<S, TypeName, Type, T>): {T}
+local function record_like_type_walker<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): {T}
+   assert(ast is RecordLikeType)
    local xs: {T} = {}
    if ast.interface_list then
       for _, child in ipairs(ast.interface_list) do
@@ -137,7 +139,8 @@ local type_walkers <total>: {TypeName: boolean | function<S, T>(s: S, ast: Type,
    ["none"] = false,
    ["*"] = false,
 
-   ["generic"] = function<S, T>(s: S, ast: GenericType, visit: Visitor<S, TypeName, Type, T>): {T}
+   ["generic"] = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): {T}
+      assert(ast is GenericType)
       local xs: {T} = {}
       for _, child in ipairs(ast.typeargs) do
          table.insert(xs, recurse_type(s, child, visit))
@@ -145,7 +148,8 @@ local type_walkers <total>: {TypeName: boolean | function<S, T>(s: S, ast: Type,
       table.insert(xs, recurse_type(s, ast.t, visit))
       return xs
    end,
-   ["tuple"] = function<S, T>(s: S, ast: TupleType, visit: Visitor<S, TypeName, Type, T>): {T}
+   ["tuple"] = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): {T}
+      assert(ast is TupleType)
       local xs: {T} = {}
       for i, child in ipairs(ast.tuple) do
          xs[i] = recurse_type(s, child, visit)
@@ -155,7 +159,8 @@ local type_walkers <total>: {TypeName: boolean | function<S, T>(s: S, ast: Type,
    ["union"] = aggregate_type_walker,
    ["tupletable"] = aggregate_type_walker,
    ["poly"] = aggregate_type_walker,
-   ["map"] = function<S, T>(s: S, ast: MapType, visit: Visitor<S, TypeName, Type, T>): {T}
+   ["map"] = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): {T}
+      assert(ast is MapType)
       return {
          recurse_type(s, ast.keys, visit),
          recurse_type(s, ast.values, visit),
@@ -163,7 +168,8 @@ local type_walkers <total>: {TypeName: boolean | function<S, T>(s: S, ast: Type,
    end,
    ["record"] = record_like_type_walker,
    ["interface"] = record_like_type_walker,
-   ["function"] = function<S, T>(s: S, ast: FunctionType, visit: Visitor<S, TypeName, Type, T>): {T}
+   ["function"] = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): {T}
+      assert(ast is FunctionType)
       local xs: {T} = {}
       if ast.args then
          for _, child in ipairs(ast.args.tuple) do
@@ -177,7 +183,8 @@ local type_walkers <total>: {TypeName: boolean | function<S, T>(s: S, ast: Type,
       end
       return xs
    end,
-   ["nominal"] = function<S, T>(s: S, ast: NominalType, visit: Visitor<S, TypeName, Type, T>): {T}
+   ["nominal"] = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): {T}
+      assert(ast is NominalType)
       local xs: {T} = {}
       if ast.typevals then
          for _, child in ipairs(ast.typevals) do
@@ -186,23 +193,27 @@ local type_walkers <total>: {TypeName: boolean | function<S, T>(s: S, ast: Type,
       end
       return xs
    end,
-   ["typearg"] = function<S, T>(s: S, ast: TypeArgType, visit: Visitor<S, TypeName, Type, T>): {T}
+   ["typearg"] = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): {T}
+      assert(ast is TypeArgType)
       return {
          ast.constraint and recurse_type(s, ast.constraint, visit)
       }
    end,
-   ["array"] = function<S, T>(s: S, ast: ArrayType, visit: Visitor<S, TypeName, Type, T>): {T}
+   ["array"] = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): {T}
+      assert(ast is ArrayType)
       return {
          recurse_type(s, ast.elements, visit)
       }
    end,
-   ["literal_table_item"] = function<S, T>(s: S, ast: LiteralTableItemType, visit: Visitor<S, TypeName, Type, T>): {T}
+   ["literal_table_item"] = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): {T}
+      assert(ast is LiteralTableItemType)
       return {
          recurse_type(s, ast.ktype, visit),
          recurse_type(s, ast.vtype, visit),
       }
    end,
-   ["typedecl"] = function<S, T>(s: S, ast: TypeDeclType, visit: Visitor<S, TypeName, Type, T>): {T}
+   ["typedecl"] = function<S, T>(s: S, ast: Type, visit: Visitor<S, TypeName, Type, T>): {T}
+      assert(ast is TypeDeclType)
       return {
          recurse_type(s, ast.def, visit)
       }
@@ -482,7 +493,8 @@ function traversal.traverse_nodes<S, T>(s: S, root: types.Node,
    end
    local visit_after = visit_node.after
 
-   recurse = function(ast: Node): T
+   recurse = function(ast: types.Node): T
+      assert(ast is Node)
       local xs: {T} = {}
       local kind = assert(ast.kind)
       local kprint: string

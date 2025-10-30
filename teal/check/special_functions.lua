@@ -57,6 +57,7 @@ local is_unknown = types.is_unknown
 
 
 local function special_pcall_xpcall(self, node, a, b, argdelta)
+   assert(a.typename == "function")
    local isx = a.special_function_handler == "xpcall"
    local base_nargs = isx and 2 or 1
    local bool = a_type(node, "boolean", {})

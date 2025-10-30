@@ -16,7 +16,8 @@ if not ("\0"):match("%z") then
    json_special_codes = "[\0-\31\34\92]"
 end
 
-local function json_escape(s: string): string
+local function json_escape(s: any): string
+   assert(s is string)
    return "\\u" .. string.format("%04x", s:byte())
 end
 

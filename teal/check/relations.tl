@@ -135,7 +135,9 @@ local function compare_or_infer_typevar(ck: TypeChecker, typevar: string, a: Typ
    end
 end
 
-local function subtype_record(ck: TypeChecker, a: RecordType, b: RecordLikeType): boolean, {Error}
+local function subtype_record(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+   assert(a is RecordType)
+   assert(b is RecordLikeType)
    if a.elements and b.elements then
       if not ck:is_a(a.elements, b.elements) then
          return false, { errors.new("array parts have incompatible element types") }
@@ -170,7 +172,9 @@ local function subtype_record(ck: TypeChecker, a: RecordType, b: RecordLikeType)
    return true
 end
 
-local function eqtype_record(ck: TypeChecker, a: RecordType, b: RecordType): boolean, {Error}
+local function eqtype_record(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+   assert(a is RecordType)
+   assert(b is RecordType)
    -- checking array interface
    if (a.elements ~= nil) ~= (b.elements ~= nil) then
       return false, { errors.new("types do not have the same array interface") }
@@ -194,12 +198,15 @@ local function eqtype_record(ck: TypeChecker, a: RecordType, b: RecordType): boo
 end
 
 
-local function compare_true_inferring_emptytable(ck: TypeChecker, a: Type, b: EmptyTableType): boolean, {Error}
+local function compare_true_inferring_emptytable(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+   assert(b is EmptyTableType)
    ck:infer_emptytable(b, ck:infer_at(b, a))
    return true
 end
 
-local function compare_true_inferring_emptytable_if_not_userdata(ck: TypeChecker, a: RecordLikeType, b: EmptyTableType): boolean, {Error}
+local function compare_true_inferring_emptytable_if_not_userdata(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+   assert(a is RecordLikeType)
+   assert(b is EmptyTableType)
    if a.is_userdata then
       return false, { types.error("{} cannot be used with userdata type %s", a) }
    end
@@ -284,7 +291,9 @@ do
       return t
    end
 
-   are_same_nominals = function(ck: TypeChecker, t1: NominalType, t2: NominalType): boolean, {Error}
+   are_same_nominals = function(ck: TypeChecker, t1: Type, t2: Type): boolean, {Error}
+      assert(t1 is NominalType)
+      assert(t2 is NominalType)
       local t1f = nominal_found_type(ck, t1)
       local t2f = nominal_found_type(ck, t2)
       if (not t1f or not t2f) then
@@ -345,30 +354,37 @@ local emptytable_relations: {TypeName:CompareTypes} = {
    ["array"] = compare_true,
    ["map"] = compare_true,
    ["tupletable"] = compare_true,
-   ["interface"] = function(_ck: TypeChecker, _a: Type, b: InterfaceType): boolean, {Error}
+   ["interface"] = function(_ck: TypeChecker, _a: Type, b: Type): boolean, {Error}
+      assert(b is InterfaceType)
       return not b.is_userdata
    end,
-   ["record"] = function(_ck: TypeChecker, _a: Type, b: RecordType): boolean, {Error}
+   ["record"] = function(_ck: TypeChecker, _a: Type, b: Type): boolean, {Error}
+      assert(b is RecordType)
       return not b.is_userdata
    end,
 }
 
 relations.eqtype_relations = {
    ["typevar"] = {
-      ["typevar"] = function(ck: TypeChecker, a: TypeVarType, b: TypeVarType): boolean, {Error}
+      ["typevar"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is TypeVarType)
+         assert(b is TypeVarType)
          if a.typevar == b.typevar then
             return true
          end
 
          return compare_or_infer_typevar(ck, b.typevar, a, nil, ck.same_type)
       end,
-      ["*"] = function(ck: TypeChecker, a: TypeVarType, b: Type): boolean, {Error}
+      ["*"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is TypeVarType)
          return compare_or_infer_typevar(ck, a.typevar, nil, b, ck.same_type)
       end,
    },
    ["emptytable"] = emptytable_relations,
    ["tupletable"] = {
-      ["tupletable"] = function(ck: TypeChecker, a: TupleTableType, b: TupleTableType): boolean, {Error}
+      ["tupletable"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is TupleTableType)
+         assert(b is TupleTableType)
          for i = 1, math.min(#a.types, #b.types) do
             if not ck:same_type(a.types[i], b.types[i]) then
                return false, { types.error("in tuple entry " .. tostring(i) .. ": got %s, expected %s", a.types[i], b.types[i]) }
@@ -382,26 +398,34 @@ relations.eqtype_relations = {
       ["emptytable"] = compare_true_inferring_emptytable,
    },
    ["array"] = {
-      ["array"] = function(ck: TypeChecker, a: ArrayType, b: ArrayType): boolean, {Error}
+      ["array"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is ArrayType)
+         assert(b is ArrayType)
          return ck:same_type(a.elements, b.elements)
       end,
       ["emptytable"] = compare_true_inferring_emptytable,
    },
    ["map"] = {
-      ["map"] = function(ck: TypeChecker, a: MapType, b: MapType): boolean, {Error}
+      ["map"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is MapType)
+         assert(b is MapType)
          return compare_map(ck, a.keys, b.keys, a.values, b.values, true)
       end,
       ["emptytable"] = compare_true_inferring_emptytable,
    },
    ["union"] = {
-      ["union"] = function(ck: TypeChecker, a: UnionType, b: UnionType): boolean, {Error}
+      ["union"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is UnionType)
+         assert(b is UnionType)
          return (has_all_types_of(ck, a.types, b.types)
              and has_all_types_of(ck, b.types, a.types))
       end,
    },
    ["nominal"] = {
       ["nominal"] = are_same_nominals,
-      ["typedecl"] = function(ck: TypeChecker, a: NominalType, b: TypeDeclType): boolean, {Error}
+      ["typedecl"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is NominalType)
+         assert(b is TypeDeclType)
          -- used when resolving type parameters
          return ck:same_type(ck:resolve_nominal(a), b.def)
       end,
@@ -411,13 +435,17 @@ relations.eqtype_relations = {
       ["emptytable"] = compare_true_inferring_emptytable_if_not_userdata,
    },
    ["interface"] = {
-      ["interface"] = function(_ck:TypeChecker, a: InterfaceType, b: InterfaceType): boolean, {Error}
+      ["interface"] = function(_ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is InterfaceType)
+         assert(b is InterfaceType)
          return a.typeid == b.typeid
       end,
       ["emptytable"] = compare_true_inferring_emptytable_if_not_userdata,
    },
    ["function"] = {
-      ["function"] = function(ck:TypeChecker, a: FunctionType, b: FunctionType): boolean, {Error}
+      ["function"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is FunctionType)
+         assert(b is FunctionType)
          local argdelta = a.is_method and 1 or 0
          local naargs, nbargs = #a.args.tuple, #b.args.tuple
          if naargs ~= nbargs then
@@ -441,10 +469,13 @@ relations.eqtype_relations = {
       end,
    },
    ["self"] = {
-      ["self"] = function(_ck: TypeChecker, _a: SelfType, _b: SelfType): boolean, {Error}
+      ["self"] = function(_ck: TypeChecker, _a: Type, _b: Type): boolean, {Error}
+         assert(_a is SelfType)
+         assert(_b is SelfType)
          return true
       end,
-      ["*"] = function(ck: TypeChecker, a: SelfType, b: Type): boolean, {Error}
+      ["*"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is SelfType)
          return ck:same_type(ck:type_of_self(a), b)
       end,
    },
@@ -452,7 +483,9 @@ relations.eqtype_relations = {
       ["boolean"] = compare_true,
    },
    ["generic"] = {
-      ["generic"] = function(ck: TypeChecker, a: GenericType, b: GenericType): boolean, {Error}
+      ["generic"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is GenericType)
+         assert(b is GenericType)
          if #a.typeargs ~= #b.typeargs then
             return false
          end
@@ -466,10 +499,12 @@ relations.eqtype_relations = {
    },
    ["*"] = {
       ["boolean_context"] = compare_true,
-      ["self"] = function(ck: TypeChecker, a: Type, b: SelfType): boolean, {Error}
+      ["self"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(b is SelfType)
          return ck:same_type(a, (ck:type_of_self(b)))
       end,
-      ["typevar"] = function(ck: TypeChecker, a: Type, b: TypeVarType): boolean, {Error}
+      ["typevar"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(b is TypeVarType)
          return compare_or_infer_typevar(ck, b.typevar, a, nil, ck.same_type)
       end,
    },
@@ -504,7 +539,9 @@ local function subtype_nominal(ck: TypeChecker, a: Type, b: Type): boolean, {Err
    return ok, errs
 end
 
-local function subtype_array(ck: TypeChecker, a: ArrayLikeType, b: ArrayLikeType): boolean, {Error}
+local function subtype_array(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+   assert(a is ArrayLikeType or a is RecordLikeType)
+   assert(b is ArrayLikeType)
    if (not a.elements) or (not ck:is_a(a.elements, b.elements)) then
       return false
    end
@@ -524,9 +561,14 @@ relations.subtype_relations = {
       ["*"] = compare_true,
    },
    ["tuple"] = {
-      ["tuple"] = function(ck: TypeChecker, a: TupleType, b: TupleType): boolean, {Error}  -- ∀ a[i] ∈ a, b[i] ∈ b. a[i] <: b[i]
-         local at, bt = a.tuple, b.tuple                                  -- ──────────────────────────────────
-         if #at ~= #bt then                                               --        a tuple <: b tuple
+      ["tuple"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         -- ∀ a[i] ∈ a, b[i] ∈ b. a[i] <: b[i]
+         -- ──────────────────────────────────
+         --        a tuple <: b tuple
+         assert(a is TupleType)
+         assert(b is TupleType)
+         local at, bt = a.tuple, b.tuple
+         if #at ~= #bt then
             return false
          end
          for i = 1, #at do
@@ -541,19 +583,24 @@ relations.subtype_relations = {
       end,
    },
    ["typevar"] = {
-      ["typevar"] = function(ck: TypeChecker, a: TypeVarType, b: TypeVarType): boolean, {Error}
+      ["typevar"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is TypeVarType)
+         assert(b is TypeVarType)
          if a.typevar == b.typevar then
             return true
          end
 
          return compare_or_infer_typevar(ck, b.typevar, a, nil, ck.is_a)
       end,
-      ["*"] = function(ck: TypeChecker, a: TypeVarType, b: Type): boolean, {Error}
+      ["*"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is TypeVarType)
          return compare_or_infer_typevar(ck, a.typevar, nil, b, ck.is_a)
       end,
    },
    ["union"] = {
-      ["nominal"] = function(ck: TypeChecker, a: UnionType, b: NominalType): boolean, {Error}
+      ["nominal"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is UnionType)
+         assert(b is NominalType)
          -- match unions structurally
          local rb = ck:resolve_nominal(b)
          if rb is UnionType then
@@ -562,9 +609,14 @@ relations.subtype_relations = {
 
          return forall_are_subtype_of(ck, a, b)
       end,
-      ["union"] = function(ck: TypeChecker, a: UnionType, b: UnionType): boolean, {Error} -- ∀ t ∈ a. ∃ u ∈ b. t <: u
-         local used = {}                                                 -- ────────────────────────
-         for _, t in ipairs(a.types) do                                  --    a union <: b union
+      ["union"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         -- ∀ t ∈ a. ∃ u ∈ b. t <: u
+         -- ────────────────────────
+         --    a union <: b union
+         assert(a is UnionType)
+         assert(b is UnionType)
+         local used = {}
+         for _, t in ipairs(a.types) do
             ck:begin_implied_scope()
             local u = exists_supertype_in(ck, t, b)
             ck:end_implied_scope() -- don't preserve failed inferences
@@ -586,7 +638,8 @@ relations.subtype_relations = {
       -- ∃ t ∈ a, t <: b
       -- ───────────────
       --   a poly <: b
-      ["*"] = function(ck: TypeChecker, a: PolyType, b: Type): boolean, {Error}
+      ["*"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is PolyType)
          if exists_supertype_in(ck, b, a) then
             return true
          end
@@ -594,7 +647,9 @@ relations.subtype_relations = {
       end,
    },
    ["nominal"] = {
-      ["nominal"] = function(ck: TypeChecker, a: NominalType, b: NominalType): boolean, {Error}
+      ["nominal"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is NominalType)
+         assert(b is NominalType)
          local ok, errs = are_same_nominals(ck, a, b)
          if ok then
             return true
@@ -618,7 +673,9 @@ relations.subtype_relations = {
          -- all other types nominally
          return ok, errs
       end,
-      ["union"] = function(ck: TypeChecker, a: NominalType, b: UnionType): boolean, {Error}
+      ["union"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is NominalType)
+         assert(b is UnionType)
          -- match unions structurally
          local ra = ck:resolve_nominal(a)
          if ra is UnionType then
@@ -633,7 +690,9 @@ relations.subtype_relations = {
       ["string"] = compare_true,
    },
    ["string"] = {
-      ["enum"] = function(_ck: TypeChecker, a: StringType, b: EnumType): boolean, {Error}
+      ["enum"] = function(_ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is StringType)
+         assert(b is EnumType)
          if not a.literal then
             return false, { types.error("%s is not a %s", a, b) }
          end
@@ -649,7 +708,9 @@ relations.subtype_relations = {
       ["number"] = compare_true,
    },
    ["interface"] = {
-      ["interface"] = function(ck: TypeChecker, a: InterfaceType, b: InterfaceType): boolean, {Error}
+      ["interface"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is InterfaceType)
+         assert(b is InterfaceType)
          if is_in_interface_list(ck, a, b) then
             return true
          end
@@ -663,7 +724,9 @@ relations.subtype_relations = {
    },
    ["emptytable"] = emptytable_relations,
    ["tupletable"] = {
-      ["tupletable"] = function(ck: TypeChecker, a: TupleTableType, b: TupleTableType): boolean, {Error}
+      ["tupletable"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is TupleTableType)
+         assert(b is TupleTableType)
          for i = 1, math.min(#a.types, #b.types) do
             if not ck:is_a(a.types[i], b.types[i]) then
                return false, { types.error("in tuple entry "
@@ -676,12 +739,15 @@ relations.subtype_relations = {
          end
          return true
       end,
-      ["record"] = function(ck: TypeChecker, a: Type, b: RecordType): boolean, {Error}
+      ["record"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(b is RecordType)
          if b.elements then
             return relations.subtype_relations["tupletable"]["array"](ck, a, b)
          end
       end,
-      ["array"] = function(ck: TypeChecker, a: TupleTableType, b: ArrayType): boolean, {Error}
+      ["array"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is TupleTableType)
+         assert(b is ArrayType)
          if b.inferred_len and b.inferred_len > #a.types then
             return false, { errors.new("incompatible length, expected maximum length of " .. tostring(#a.types) .. ", got " .. tostring(b.inferred_len)) }
          end
@@ -694,7 +760,9 @@ relations.subtype_relations = {
          end
          return true
       end,
-      ["map"] = function(ck: TypeChecker, a: TupleTableType, b: MapType): boolean, {Error}
+      ["map"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is TupleTableType)
+         assert(b is MapType)
          local aa = ck:arraytype_from_tuple(a.inferred_at or a, a)
          if not aa then
             return false, { types.error("Unable to convert tuple %s to map", a) }
@@ -706,7 +774,9 @@ relations.subtype_relations = {
    },
    ["record"] = {
       ["record"] = subtype_record,
-      ["interface"] = function(ck: TypeChecker, a: RecordType, b: InterfaceType): boolean, {Error}
+      ["interface"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is RecordType)
+         assert(b is InterfaceType)
          if is_in_interface_list(ck, a, b) then
             return true
          end
@@ -716,7 +786,9 @@ relations.subtype_relations = {
          end
       end,
       ["array"] = subtype_array,
-      ["map"] = function(ck: TypeChecker, a: RecordType, b: MapType): boolean, {Error}
+      ["map"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is RecordType)
+         assert(b is MapType)
          if not ck:is_a(b.keys, a_type(b, "string", {})) then
             return false, { errors.new("can't match a record to a map with non-string keys") }
          end
@@ -733,7 +805,8 @@ relations.subtype_relations = {
 
          return true
       end,
-      ["tupletable"] = function(ck: TypeChecker, a: RecordType, b: Type): boolean, {Error}
+      ["tupletable"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is RecordType)
          if a.elements then
             return relations.subtype_relations["array"]["tupletable"](ck, a, b)
          end
@@ -742,15 +815,21 @@ relations.subtype_relations = {
    },
    ["array"] = {
       ["array"] = subtype_array,
-      ["record"] = function(ck: TypeChecker, a: ArrayType, b: RecordType): boolean, {Error}
+      ["record"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is ArrayType)
+         assert(b is RecordType)
          if b.elements then
             return subtype_array(ck, a, b)
          end
       end,
-      ["map"] = function(ck: TypeChecker, a: ArrayType, b: MapType): boolean, {Error}
+      ["map"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is ArrayType)
+         assert(b is MapType)
          return compare_map(ck, a_type(a, "integer", {}), b.keys, a.elements, b.values)
       end,
-      ["tupletable"] = function(ck: TypeChecker, a: ArrayType, b: TupleTableType): boolean, {Error}
+      ["tupletable"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is ArrayType)
+         assert(b is TupleTableType)
          local alen = a.inferred_len or 0
          if alen > #b.types then
             return false, { errors.new("incompatible length, expected maximum length of " .. tostring(#b.types) .. ", got " .. tostring(alen)) }
@@ -768,21 +847,29 @@ relations.subtype_relations = {
       ["emptytable"] = compare_true_inferring_emptytable,
    },
    ["map"] = {
-      ["map"] = function(ck: TypeChecker, a: MapType, b: MapType): boolean, {Error}
+      ["map"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is MapType)
+         assert(b is MapType)
          return compare_map(ck, a.keys, b.keys, a.values, b.values)
       end,
-      ["array"] = function(ck: TypeChecker, a: MapType, b: ArrayType): boolean, {Error}
+      ["array"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is MapType)
+         assert(b is ArrayType)
          return compare_map(ck, a.keys, a_type(b, "integer", {}), a.values, b.elements)
       end,
       ["emptytable"] = compare_true_inferring_emptytable,
    },
    ["typedecl"] = {
-      ["*"] = function(ck: TypeChecker, a: TypeDeclType, b: RecordType): boolean, {Error}
+      ["*"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is TypeDeclType)
+         assert(b is RecordType)
          return ck:is_a(a.def, b)
       end,
    },
    ["function"] = {
-      ["function"] = function(ck: TypeChecker, a: FunctionType, b: FunctionType): boolean, {Error}
+      ["function"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is FunctionType)
+         assert(b is FunctionType)
          local errs = {}
 
          local aa, ba = a.args.tuple, b.args.tuple
@@ -816,18 +903,24 @@ relations.subtype_relations = {
       end,
    },
    ["self"] = {
-      ["self"] = function(_ck: TypeChecker, _a: SelfType, _b: SelfType): boolean, {Error}
+      ["self"] = function(_ck: TypeChecker, _a: Type, _b: Type): boolean, {Error}
+         assert(_a is SelfType)
+         assert(_b is SelfType)
          return true
       end,
-      ["*"] = function(ck: TypeChecker, a: SelfType, b: Type): boolean, {Error}
+      ["*"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is SelfType)
          return ck:is_a(ck:type_of_self(a), b)
       end,
    },
    ["typearg"] = {
-      ["typearg"] = function(_ck: TypeChecker, a: TypeArgType, b: TypeArgType): boolean, {Error}
+      ["typearg"] = function(_ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is TypeArgType)
+         assert(b is TypeArgType)
          return a.typearg == b.typearg
       end,
-      ["*"] = function(ck: TypeChecker, a: TypeArgType, b: Type): boolean, {Error}
+      ["*"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is TypeArgType)
          if a.constraint then
             return ck:is_a(a.constraint, b)
          end
@@ -837,7 +930,8 @@ relations.subtype_relations = {
       ["boolean"] = compare_true,
    },
    ["generic"] = {
-      ["*"] = function(ck: TypeChecker, a: GenericType, b: Type): boolean, {Error}
+      ["*"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(a is GenericType)
          -- TODO check if commenting this out causes variable leaks anywhere
          -- ck:begin_scope()
          local aa = ck:apply_generic(a, a)
@@ -849,14 +943,17 @@ relations.subtype_relations = {
    ["*"] = {
       ["any"] = compare_true,
       ["boolean_context"] = compare_true,
-      ["emptytable"] = function(_ck: TypeChecker, a: Type, _b: EmptyTableType): boolean, {Error}
+      ["emptytable"] = function(_ck: TypeChecker, a: Type, _b: Type): boolean, {Error}
+         assert(_b is EmptyTableType)
          return false, { types.error("assigning %s to a variable declared with {}", a) }
       end,
-      ["unresolved_emptytable_value"] = function(ck: TypeChecker, a: Type, b: UnresolvedEmptyTableValueType): boolean, {Error}
+      ["unresolved_emptytable_value"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(b is UnresolvedEmptyTableValueType)
          ck:infer_emptytable_from_unresolved_value(b, b, a)
          return true
       end,
-      ["generic"] = function(ck: TypeChecker, a: Type, b: GenericType): boolean, {Error}
+      ["generic"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(b is GenericType)
          -- TODO check if commenting this out causes variable leaks anywhere
          -- ck:begin_scope()
          local bb = ck:apply_generic(b, b)
@@ -864,20 +961,24 @@ relations.subtype_relations = {
          -- ck:end_scope()
          return ok, errs
       end,
-      ["self"] = function(ck: TypeChecker, a: Type, b: SelfType): boolean, {Error}
+      ["self"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(b is SelfType)
          return ck:is_a(a, (ck:type_of_self(b)))
       end,
       ["tuple"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
          local tuple = a_type(a, "tuple", { tuple = {a} } as TupleType)
          return ck:is_a(tuple, b)
       end,
-      ["typedecl"] = function(ck: TypeChecker, a: Type, b: TypeDeclType): boolean, {Error}
+      ["typedecl"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(b is TypeDeclType)
          return ck:is_a(a, b.def)
       end,
-      ["typevar"] = function(ck: TypeChecker, a: Type, b: TypeVarType): boolean, {Error}
+      ["typevar"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(b is TypeVarType)
          return compare_or_infer_typevar(ck, b.typevar, a, nil, ck.is_a)
       end,
-      ["typearg"] = function(ck: TypeChecker, a: Type, b: TypeArgType): boolean, {Error}
+      ["typearg"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(b is TypeArgType)
          if b.constraint then
             return ck:is_a(a, b.constraint)
          end
@@ -890,7 +991,8 @@ relations.subtype_relations = {
       -- ∀ t ∈ b, a <: t
       -- ───────────────
       --   a <: b poly
-      ["poly"] = function(ck: TypeChecker, a: Type, b: PolyType): boolean, {Error}
+      ["poly"] = function(ck: TypeChecker, a: Type, b: Type): boolean, {Error}
+         assert(b is PolyType)
          for _, t in ipairs(b.types) do
             if not ck:is_a(a, t) then
                return false, { errors.new("cannot match against all alternatives of the polymorphic type") }

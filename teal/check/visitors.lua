@@ -41,7 +41,6 @@ local types = require("teal.types")
 
 
 
-
 local a_type = types.a_type
 local a_function = types.a_function
 local a_vararg = types.a_vararg
@@ -1282,7 +1281,8 @@ visit_node.cbs = {
             end
          end
       end,
-      after = function(self, node, children)
+      after = function(self, node, children_)
+         local children = children_
          self.fdb:set_truthy(node)
 
          if not node.expected then
@@ -2386,16 +2386,19 @@ local metamethod_is_method = {
 visit_type.cbs = {
    ["generic"] = {
       before = function(self, typ)
+         assert(typ.typename == "generic")
          self:begin_implied_scope()
          self:add_var(nil, "@generic", typ)
       end,
       after = function(self, typ, _children)
+         assert(typ.typename == "generic")
          self:end_implied_scope()
          return self:fresh_typeargs(typ)
       end,
    },
    ["function"] = {
       after = function(self, typ, _children)
+         assert(typ.typename == "function")
          if self.feat_arity == false then
             typ.min_arity = 0
          end
@@ -2404,10 +2407,12 @@ visit_type.cbs = {
    },
    ["record"] = {
       before = function(self, typ)
+         assert(typ.fields)
          self:begin_implied_scope()
          self:begin_temporary_record_types(typ)
       end,
       after = function(self, typ, children)
+         assert(typ.fields)
          local i = 1
          if typ.interface_list then
             for j, _ in ipairs(typ.interface_list) do
@@ -2501,6 +2506,7 @@ visit_type.cbs = {
    },
    ["typearg"] = {
       after = function(self, typ, _children)
+         assert(typ.typename == "typearg")
          local name = typ.typearg
          local old = self:find_var(name, "check_only")
          if old then
@@ -2519,6 +2525,7 @@ visit_type.cbs = {
    },
    ["typevar"] = {
       after = function(self, typ, _children)
+         assert(typ.typename == "typevar")
          if not self:find_var_type(typ.typevar) then
             self.errs:add(typ, "undefined type variable " .. typ.typevar)
          end
@@ -2527,6 +2534,7 @@ visit_type.cbs = {
    },
    ["nominal"] = {
       after = function(self, typ, _children)
+         assert(typ.typename == "nominal")
          if typ.found then
             return typ
          end
@@ -2563,6 +2571,7 @@ visit_type.cbs = {
    },
    ["union"] = {
       after = function(self, typ, _children)
+         assert(typ.typename == "union")
          local _, err = is_valid_union(typ)
          if err then
             return self.errs:invalid_at(typ, err, typ)
