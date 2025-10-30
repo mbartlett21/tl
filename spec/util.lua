@@ -7,6 +7,9 @@ local util = {
    os_cat    = win32 and "type " or "cat ",
 }
 
+package.path = package.path:gsub("[/\\]", util.os_sep)
+package.cpath = package.cpath:gsub("[/\\]", util.os_sep)
+
 function util.os_path(path)
    return win32 and path:gsub("/", "\\") or path
 end
@@ -259,7 +262,7 @@ function util.lua_cmd(...)
 
    local add_package_path = [[package.path = package.path .. ";]] .. initial_dir .. [[/?.lua"]]
 
-   local cmd = { util.lua_interpreter, "-e", add_package_path, ... }
+   local cmd = { util.lua_interpreter, "-E", "-e", add_package_path, ... }
    for i = 2, #cmd do
       cmd[i] = string.format("%q", cmd[i])
    end
