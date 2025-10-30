@@ -269,10 +269,10 @@ global record package
    cpath: string
    loaded: {string:any}
    loadlib: function(string, string): (function)
-   loaders: { (function(string): (function(? string, ? any): (any), any)) }
+   loaders: { (function(string): (string | function(? string, ? any): (any), any)) }
    path: string
    preload: {string : function(? string, ? any): (any) }
-   searchers: { (function(string): (function(? string, ? any): (any), any)) }
+   searchers: { (function(string): (string | function(? string, ? any): (any), any)) }
    searchpath: function(string, string, ? string, ? string): string, string
 end
 

@@ -9,7 +9,7 @@ local record package_loader
    env: Env
 end
 
-local function tl_package_loader(module_name: string): any, any
+local function tl_package_loader(module_name: string): (string | function(? string, ? any): (any), any)
    local env = package_loader.env
    if not env then
       package_loader.env = environment.for_runtime()
@@ -34,11 +34,11 @@ local function tl_package_loader(module_name: string): any, any
       error("Internal Compiler Error: Teal generator produced invalid Lua. Please report a bug at https://github.com/teal-language/tl\n\n" .. err)
    end
 
-   return function(modname: string, loader_data: string): any
+   return function(modname ?: string, loader_data ?: any): any
       if loader_data == nil then
          loader_data = found_filename
       end
-      local ret = chunk(modname, loader_data)
+      local ret = chunk(modname, loader_data as string)
       return ret
    end, found_filename
 end
