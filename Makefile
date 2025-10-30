@@ -55,18 +55,18 @@ _temp/%.lua.2: %.tl _temp/%.lua.1 $(PRECOMPILED)
 	@echo $< >> _temp/list2
 	@touch $@
 
-build1: $(addprefix _temp/,$(addsuffix .lua.1,$(basename $(SOURCES))))
+build1: $(SOURCES:%.tl=_temp/%.lua.1) $(PRECOMPILED)
 	if [ -e _temp/list1 ]; \
-	then $(STABLE_TL) gen $(TLGENFLAGS) --root . --custom-ext .lua.1 --output-dir _temp `cat _temp/list1` || { rm `cat _temp/list1.1`; exit 1; };\
+		then $(STABLE_TL) gen $(TLGENFLAGS) --root . --custom-ext .lua.1 --output-dir _temp `cat _temp/list1` || { rm `cat _temp/list1.1`; exit 1; };\
 	fi
 
 replace1:
 	extras/make.sh move_1_to_lua
 	@rm -f _temp/list2
 
-build2: $(addprefix _temp/,$(addsuffix .lua.2,$(basename $(SOURCES))))
+build2: $(SOURCES:%.tl=_temp/%.lua.2)
 	if [ -e _temp/list2 ]; \
-	then $(NEW_TL) gen $(TLGENFLAGS) --root . --custom-ext .lua.2 --output-dir _temp `cat _temp/list2` || extras/make.sh revert; \
+		then $(NEW_TL) gen $(TLGENFLAGS) --root . --custom-ext .lua.2 --output-dir _temp `cat _temp/list2` || extras/make.sh revert; \
 	fi
 
 newlist:
@@ -101,7 +101,7 @@ combine:
 	$(STABLE_TL) run extras/combine.tl
 
 revert:
-	git checkout $(PRECOMPILED) $(addsuffix .lua,$(basename $(SOURCES)))
+	git checkout $(PRECOMPILED) $(SOURCES:%.tl=%.lua)
 
 cov:
 	rm -f luacov.stats.out luacov.report.out
