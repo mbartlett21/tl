@@ -118,6 +118,7 @@ local record teal
 
    record CompilerOptions
       feat_arity: Feat
+      feat_strict_fns: Feat
       gen_compat: GenCompat
       gen_target: GenTarget
    end
@@ -367,6 +368,7 @@ function teal.compiler(opts?: CompilerOptions): Compiler
 
    local env_opts = {
       feat_arity = opts and opts.feat_arity,
+      feat_strict_fns = opts and opts.feat_strict_fns,
       gen_compat = opts and opts.gen_compat,
       gen_target = opts and opts.gen_target,
    }

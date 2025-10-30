@@ -42,6 +42,7 @@ local record v2
    record CheckOptions
       feat_lax: Feat
       feat_arity: Feat
+      feat_strict_fns: Feat
       gen_compat: GenCompat
       gen_target: GenTarget
    end
@@ -98,6 +99,7 @@ local type TypeReport = v2.TypeReport
 local function env_from_check_options(opts?: CheckOptions): Env
    return environment.new(opts and {
       feat_arity = opts.feat_arity,
+      feat_strict_fns = opts.feat_strict_fns,
       gen_compat = opts.gen_compat,
       gen_target = opts.gen_target,
    })
@@ -121,6 +123,9 @@ v2.check = function(ast: Node, filename?: string, opts?: CheckOptions, env?: Env
       -- as this is the behavior exposed by the `tl` CLI anyway.
       if opts.feat_arity and env.opts.feat_arity and opts.feat_arity ~= env.opts.feat_arity then
          return nil, "opts.feat_arity does not match environment setting"
+      end
+      if opts.feat_strict_fns and env.opts.feat_strict_fns and opts.feat_strict_fns ~= env.opts.feat_strict_fns then
+         return nil, "opts.feat_strict_fns does not match environment setting"
       end
       if opts.gen_compat and env.opts.gen_compat and opts.gen_compat ~= env.opts.gen_compat then
          return nil, "opts.gen_compat does not match environment setting"

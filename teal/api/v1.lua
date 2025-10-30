@@ -150,6 +150,7 @@ v1.type_check = function(ast, tc_opts)
    local opts = {
       feat_lax = tc_opts.lax and "on" or "off",
       feat_arity = tc_opts.env and tc_opts.env.opts.feat_arity or "on",
+      feat_strict_fns = tc_opts.env and tc_opts.env.opts.feat_strict_fns or "on",
       gen_compat = tc_opts.gen_compat,
       gen_target = tc_opts.gen_target,
    }

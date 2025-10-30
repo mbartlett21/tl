@@ -172,6 +172,7 @@ local context = { Context = {} }
 
 
 
+
 local Context = context.Context
 
 
@@ -2394,10 +2395,12 @@ do
       self.cache_std_metatable_type = env.globals["metatable"] and (env.globals["metatable"].t).def
 
       self.feat_arity = set_feat(env.opts.feat_arity, true)
+      self.feat_strict_fns = set_feat(env.opts.feat_strict_fns, false)
       self.feat_lax = not not filename:match("%.lua$")
 
       if self.feat_lax then
          self.feat_arity = false
+         self.feat_strict_fns = false
          self.type_priorities = relations.lax_type_priorities()
          self.subtype_relations = relations.lax_subtype_relations()
          self.get_rets = function(rets)

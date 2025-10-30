@@ -793,7 +793,7 @@ a.types[i], b.types[i]), }
                local ai = aa[i]
                local bi = ba[i] or (b.args.is_va and ba[#ba])
                if bi then
-                  ck:arg_check(nil, errs, ai, bi, "bivariant", "argument", i)
+                  ck:arg_check(nil, errs, ai, bi, ck.feat_strict_fns and "contravariant" or "bivariant", "argument", i)
                end
             end
          end
@@ -808,7 +808,7 @@ a.types[i], b.types[i]), }
                nrets = nrets - 1
             end
             for i = 1, nrets do
-               ck:arg_check(nil, errs, ar[i], br[i], "bivariant", "return", i)
+               ck:arg_check(nil, errs, ar[i], br[i], ck.feat_strict_fns and "covariant" or "bivariant", "return", i)
             end
          end
 

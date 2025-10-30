@@ -3,6 +3,7 @@ local record Args
    command: string
    custom_ext: string
    feat_arity: string
+   feat_strict_fns: string
    file: {string}
    gen_target: string
    gen_compat: string

@@ -76,6 +76,7 @@ local function validate_config(config: {any:any}): TlConfig, {string}, {string}
       quiet = "boolean",
       skip_compat53 = "boolean",
       feat_arity = { ["off"] = true, ["on"] = true },
+      feat_strict_fns = { ["off"] = true, ["on"] = true },
       gen_compat = { ["off"] = true, ["optional"] = true, ["required"] = true },
       gen_target = { ["5.1"] = true, ["5.3"] = true, ["5.4"] = true },
       disable_warnings = "{string}",
@@ -232,6 +233,7 @@ function configuration.merge_config_and_args(tlconfig: TlConfig, args: Args)
    end
 
    tlconfig["feat_arity"] = args["feat_arity"] or tlconfig["feat_arity"]
+   tlconfig["feat_strict_fns"] = args["feat_strict_fns"] or tlconfig["feat_strict_fns"]
 
    tlconfig["gen_target"] = args["gen_target"] or tlconfig["gen_target"]
    tlconfig["gen_compat"] = args["gen_compat"] or tlconfig["gen_compat"]

@@ -49,6 +49,7 @@ local record type_checker
 
    interface TypeChecker
       feat_arity: boolean
+      feat_strict_fns: boolean
       feat_lax: boolean
 
       add_implied_var: function(self, name: string, t: Type)

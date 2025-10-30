@@ -38,6 +38,9 @@ local function get_args_parser(): argparse.Parser
    parser:option("--feat-arity", "Define minimum arities for functions based on optional argument annotations.")
          :choices({ "off", "on" })
 
+   parser:option("--feat-strict-fns", "Uses co- and contravariant verification for function typing.")
+         :choices({ "off", "on" })
+
    parser:option("--gen-compat", "Generate compatibility code for targeting different Lua VM versions.")
          :choices({ "off", "optional", "required" })
          :default("optional")

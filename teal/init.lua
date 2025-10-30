@@ -132,6 +132,7 @@ local teal = { CheckError = {}, Compiler = {}, Input = {}, TokenList = {}, Parse
 
 
 
+
 local Compiler = teal.Compiler
 local Module = teal.Module
 
@@ -367,6 +368,7 @@ function teal.compiler(opts)
 
    local env_opts = {
       feat_arity = opts and opts.feat_arity,
+      feat_strict_fns = opts and opts.feat_strict_fns,
       gen_compat = opts and opts.gen_compat,
       gen_target = opts and opts.gen_target,
    }

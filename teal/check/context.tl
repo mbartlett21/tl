@@ -159,6 +159,7 @@ local record context
       cache_std_metatable_type: Type
 
       feat_arity: boolean
+      feat_strict_fns: boolean
       feat_lax: boolean
 
       type_check_funcall: function(self, node: Node, a: Type, b: TupleType, argdelta?: integer): InvalidOrTupleType
@@ -2394,10 +2395,12 @@ do
       self.cache_std_metatable_type = env.globals["metatable"] and (env.globals["metatable"].t as TypeDeclType).def
 
       self.feat_arity = set_feat(env.opts.feat_arity, true)
+      self.feat_strict_fns = set_feat(env.opts.feat_strict_fns, false)
       self.feat_lax = not not filename:match("%.lua$")
 
       if self.feat_lax then
          self.feat_arity = false
+         self.feat_strict_fns = false
          self.type_priorities = relations.lax_type_priorities()
          self.subtype_relations = relations.lax_subtype_relations()
          self.get_rets = function(rets: TupleType): TupleType

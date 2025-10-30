@@ -20,7 +20,7 @@ global record metatable<T>
       "k" "v" "kv"
    end
 
-   __call: function(T, any...): any...
+   __call: any --[[FIXME: function(T, <bivariant> any...): <bivariant> any...]]
    __mode: Mode
    __name: string
    __tostring: function(T): string

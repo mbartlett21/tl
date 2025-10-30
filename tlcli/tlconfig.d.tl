@@ -2,6 +2,7 @@ local record TlConfig
    disable_warnings: {string}
    include_dir: {string}
    feat_arity: string
+   feat_strict_fns: string
    gen_target: string
    gen_compat: string
    global_env_def: string
