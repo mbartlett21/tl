@@ -233,4 +233,24 @@ describe("metamethod __call", function()
          Foo(1)
       ]]))
    end)
+
+   describe("method returning self", function()
+      it("resolves self to the proper type, not the caller, with method", util.check([[
+         local record Foo
+         end
+
+         local record Selfish
+            me: function(self): self
+         end
+
+         function Foo:bar(_a: Selfish)
+         end
+
+         local x: Selfish
+         local foo: Foo = {}
+
+         local myself = x:me()
+         foo:bar(myself)
+      ]]))
+   end)
 end)

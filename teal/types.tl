@@ -968,6 +968,7 @@ types.map = function<S>(self: S, ty: Type, fns: types.TypeFunctionMap<S>): Type,
          copy.args, same = resolve(t.args, same) as (TupleType, boolean)
          copy.rets, same = resolve(t.rets, same) as (TupleType, boolean)
          copy.special_function_handler = t.special_function_handler
+         copy.maybe_method = t.maybe_method
       elseif t is RecordLikeType then
          assert(copy is RecordType or copy is InterfaceType)
          copy.declname = t.declname

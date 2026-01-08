@@ -968,6 +968,7 @@ types.map = function(self, ty, fns)
          copy.args, same = resolve(t.args, same)
          copy.rets, same = resolve(t.rets, same)
          copy.special_function_handler = t.special_function_handler
+         copy.maybe_method = t.maybe_method
       elseif t.fields then
          assert(copy.typename == "record" or copy.typename == "interface")
          copy.declname = t.declname
