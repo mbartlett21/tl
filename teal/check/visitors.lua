@@ -813,6 +813,10 @@ visit_node.cbs = {
       end,
       after = function(self, node, _children)
          self:dismiss_unresolved(node.var.tk)
+
+
+
+         self:mark_local_declaration()
          return NONE
       end,
    },
@@ -854,6 +858,7 @@ visit_node.cbs = {
       end,
       before_exp = set_expected_types_to_decltuple,
       after = function(self, node, children)
+         self:mark_local_declaration()
          local valtuple = children[3]
 
          local encountered_close = false
@@ -913,6 +918,7 @@ visit_node.cbs = {
       before_exp = set_expected_types_to_decltuple,
       after = function(self, node, children)
          local valtuple = children[3]
+         if valtuple then self:mark_nonlabel_statement() end
 
          local infertypes = get_assignment_values(node, valtuple, #node.vars)
          for i, var in ipairs(node.vars) do
@@ -935,6 +941,7 @@ visit_node.cbs = {
    ["assignment"] = {
       before_exp = set_expected_types_to_decltuple,
       after = function(self, node, children)
+         self:mark_nonlabel_statement()
          local vartuple = children[1]
          assert(vartuple.typename == "tuple")
          local vartypes = vartuple.tuple
@@ -1052,14 +1059,33 @@ visit_node.cbs = {
             end
          end
 
-
          local scope = self.st[#self.st]
-         if scope.pending_labels and scope.pending_labels[label_id] then
-            node.used_label = true
-            scope.pending_labels[label_id] = nil
 
+
+
+         if scope.pending_labels_beforelocalscope and scope.pending_labels_beforelocalscope[label_id] then
+            node.used_label = true
+            scope.pending_labels_beforelocalscope[label_id] = nil
          end
 
+
+
+
+         if scope.pending_labels_afterlocalscope and scope.pending_labels_afterlocalscope[label_id] then
+            node.used_label = true
+
+
+            local nodes_using_label = scope.pending_labels_afterlocalscope[label_id]
+            if scope.labels_required_at_end then
+               scope.labels_required_at_end[label_id] = scope.labels_required_at_end[label_id] or {}
+               for _, n in ipairs(nodes_using_label) do
+                  table.insert(scope.labels_required_at_end[label_id], n)
+               end
+            else
+               scope.labels_required_at_end = { [label_id] = scope.pending_labels_afterlocalscope[label_id] }
+            end
+            scope.pending_labels_afterlocalscope[label_id] = nil
+         end
       end,
       after = function()
          return NONE
@@ -1067,6 +1093,10 @@ visit_node.cbs = {
    },
    ["goto"] = {
       after = function(self, node, _children)
+
+
+
+         self:mark_nonlabel_statement()
          local label_id = node.label
          local found_label
          for i = #self.st, 1, -1 do
@@ -1081,9 +1111,9 @@ visit_node.cbs = {
             found_label.used_label = true
          else
             local scope = self.st[#self.st]
-            scope.pending_labels = scope.pending_labels or {}
-            scope.pending_labels[label_id] = scope.pending_labels[label_id] or {}
-            table.insert(scope.pending_labels[label_id], node)
+            scope.pending_labels_beforelocalscope = scope.pending_labels_beforelocalscope or {}
+            scope.pending_labels_beforelocalscope[label_id] = scope.pending_labels_beforelocalscope[label_id] or {}
+            table.insert(scope.pending_labels_beforelocalscope[label_id], node)
          end
 
          return NONE
@@ -1192,6 +1222,7 @@ visit_node.cbs = {
    },
    ["return"] = {
       before = function(self, node)
+         self:mark_nonlabel_statement()
          local rets = self:find_var_type("@return")
          if rets and rets.typename == "tuple" then
             for i, exp in ipairs(node.exps) do
@@ -2352,7 +2383,10 @@ visit_node.cbs = {
 }
 
 visit_node.cbs["break"] = {
-   after = function(_self, _node, _children)
+   after = function(self, _node, _children)
+
+
+      self:mark_nonlabel_statement()
       return NONE
    end,
 }

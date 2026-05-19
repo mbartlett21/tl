@@ -3775,7 +3775,26 @@ function Context:widen_all(widens, widen_types)
    end
 end
 
+
+
+
+
+function Context:mark_nonlabel_statement()
+   local st = self.st
+   local scope = st[#st]
+
+   if scope.labels_required_at_end then
+      for name, nodes in pairs(scope.labels_required_at_end) do
+         for _, n in ipairs(nodes) do
+            self.errs:add(n, "goto jumps into the scope of local variable")
+         end
+      end
+   end
+end
+
 function Context:begin_scope(node)
+   self:mark_nonlabel_statement()
+
    table.insert(self.st, { vars = {} })
 
    if self.collector and node then
@@ -3785,6 +3804,28 @@ end
 
 function Context:begin_implied_scope()
    self:begin_scope(nil)
+end
+
+
+function Context:mark_local_declaration()
+   local st = self.st
+   local scope = st[#st]
+
+   if scope.pending_labels_beforelocalscope then
+      if scope.pending_labels_afterlocalscope then
+         for name, nodes in pairs(scope.pending_labels_beforelocalscope) do
+            for _, n in ipairs(nodes) do
+               scope.pending_labels_afterlocalscope[name] = scope.pending_labels_afterlocalscope[name] or {}
+               table.insert(scope.pending_labels_afterlocalscope[name], n)
+            end
+         end
+      else
+         scope.pending_labels_afterlocalscope = scope.pending_labels_beforelocalscope
+      end
+      scope.pending_labels_beforelocalscope = nil
+   end
+
+   self:mark_nonlabel_statement()
 end
 
 function Context:end_scope(node)
@@ -3820,18 +3861,38 @@ function Context:end_scope(node)
       return
    end
 
-   if scope.pending_labels then
-      if next_scope.pending_labels then
-         for name, nodes in pairs(scope.pending_labels) do
+   if scope.pending_labels_beforelocalscope then
+      if next_scope.pending_labels_beforelocalscope then
+         for name, nodes in pairs(scope.pending_labels_beforelocalscope) do
             for _, n in ipairs(nodes) do
-               next_scope.pending_labels[name] = next_scope.pending_labels[name] or {}
-               table.insert(next_scope.pending_labels[name], n)
+               next_scope.pending_labels_beforelocalscope[name] = next_scope.pending_labels_beforelocalscope[name] or {}
+               table.insert(next_scope.pending_labels_beforelocalscope[name], n)
             end
          end
       else
-         next_scope.pending_labels = scope.pending_labels
+         next_scope.pending_labels_beforelocalscope = scope.pending_labels_beforelocalscope
       end
    end
+
+
+
+   if scope.pending_labels_afterlocalscope then
+      if next_scope.pending_labels_beforelocalscope then
+         for name, nodes in pairs(scope.pending_labels_afterlocalscope) do
+            for _, n in ipairs(nodes) do
+               next_scope.pending_labels_beforelocalscope[name] = next_scope.pending_labels_beforelocalscope[name] or {}
+               table.insert(next_scope.pending_labels_beforelocalscope[name], n)
+            end
+         end
+      else
+         next_scope.pending_labels_beforelocalscope = scope.pending_labels_afterlocalscope
+      end
+   end
+
+
+
+
+
 
    if scope.pending_nominals then
       if next_scope.pending_nominals then
@@ -3878,7 +3939,8 @@ function Context:commit_scope_transaction(node)
    local next_scope = st[#st - 1]
 
    assert(scope.is_transaction)
-   assert(not scope.pending_labels)
+   assert(not scope.pending_labels_beforelocalscope)
+   assert(not scope.pending_labels_afterlocalscope)
    assert(not scope.pending_nominals)
 
    for name, var in pairs(scope.vars) do
@@ -8340,6 +8402,10 @@ visit_node.cbs = {
       end,
       after = function(self, node, _children)
          self:dismiss_unresolved(node.var.tk)
+
+
+
+         self:mark_local_declaration()
          return NONE
       end,
    },
@@ -8381,6 +8447,7 @@ visit_node.cbs = {
       end,
       before_exp = set_expected_types_to_decltuple,
       after = function(self, node, children)
+         self:mark_local_declaration()
          local valtuple = children[3]
 
          local encountered_close = false
@@ -8440,6 +8507,7 @@ visit_node.cbs = {
       before_exp = set_expected_types_to_decltuple,
       after = function(self, node, children)
          local valtuple = children[3]
+         if valtuple then self:mark_nonlabel_statement() end
 
          local infertypes = get_assignment_values(node, valtuple, #node.vars)
          for i, var in ipairs(node.vars) do
@@ -8462,6 +8530,7 @@ visit_node.cbs = {
    ["assignment"] = {
       before_exp = set_expected_types_to_decltuple,
       after = function(self, node, children)
+         self:mark_nonlabel_statement()
          local vartuple = children[1]
          assert(vartuple.typename == "tuple")
          local vartypes = vartuple.tuple
@@ -8579,14 +8648,33 @@ visit_node.cbs = {
             end
          end
 
-
          local scope = self.st[#self.st]
-         if scope.pending_labels and scope.pending_labels[label_id] then
-            node.used_label = true
-            scope.pending_labels[label_id] = nil
 
+
+
+         if scope.pending_labels_beforelocalscope and scope.pending_labels_beforelocalscope[label_id] then
+            node.used_label = true
+            scope.pending_labels_beforelocalscope[label_id] = nil
          end
 
+
+
+
+         if scope.pending_labels_afterlocalscope and scope.pending_labels_afterlocalscope[label_id] then
+            node.used_label = true
+
+
+            local nodes_using_label = scope.pending_labels_afterlocalscope[label_id]
+            if scope.labels_required_at_end then
+               scope.labels_required_at_end[label_id] = scope.labels_required_at_end[label_id] or {}
+               for _, n in ipairs(nodes_using_label) do
+                  table.insert(scope.labels_required_at_end[label_id], n)
+               end
+            else
+               scope.labels_required_at_end = { [label_id] = scope.pending_labels_afterlocalscope[label_id] }
+            end
+            scope.pending_labels_afterlocalscope[label_id] = nil
+         end
       end,
       after = function()
          return NONE
@@ -8594,6 +8682,10 @@ visit_node.cbs = {
    },
    ["goto"] = {
       after = function(self, node, _children)
+
+
+
+         self:mark_nonlabel_statement()
          local label_id = node.label
          local found_label
          for i = #self.st, 1, -1 do
@@ -8608,9 +8700,9 @@ visit_node.cbs = {
             found_label.used_label = true
          else
             local scope = self.st[#self.st]
-            scope.pending_labels = scope.pending_labels or {}
-            scope.pending_labels[label_id] = scope.pending_labels[label_id] or {}
-            table.insert(scope.pending_labels[label_id], node)
+            scope.pending_labels_beforelocalscope = scope.pending_labels_beforelocalscope or {}
+            scope.pending_labels_beforelocalscope[label_id] = scope.pending_labels_beforelocalscope[label_id] or {}
+            table.insert(scope.pending_labels_beforelocalscope[label_id], node)
          end
 
          return NONE
@@ -8719,6 +8811,7 @@ visit_node.cbs = {
    },
    ["return"] = {
       before = function(self, node)
+         self:mark_nonlabel_statement()
          local rets = self:find_var_type("@return")
          if rets and rets.typename == "tuple" then
             for i, exp in ipairs(node.exps) do
@@ -9879,7 +9972,10 @@ visit_node.cbs = {
 }
 
 visit_node.cbs["break"] = {
-   after = function(_self, _node, _children)
+   after = function(self, _node, _children)
+
+
+      self:mark_nonlabel_statement()
       return NONE
    end,
 }
@@ -17801,8 +17897,15 @@ function Errors:add_unknown_dot(w, name)
 end
 
 function Errors:fail_unresolved_labels(scope)
-   if scope.pending_labels then
-      for name, nodes in pairs(scope.pending_labels) do
+   if scope.pending_labels_beforelocalscope then
+      for name, nodes in pairs(scope.pending_labels_beforelocalscope) do
+         for _, node in ipairs(nodes) do
+            self:add(node, "no visible label '" .. name .. "' for goto")
+         end
+      end
+   end
+   if scope.pending_labels_afterlocalscope then
+      for name, nodes in pairs(scope.pending_labels_afterlocalscope) do
          for _, node in ipairs(nodes) do
             self:add(node, "no visible label '" .. name .. "' for goto")
          end
@@ -19782,6 +19885,18 @@ local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 th
 
 
 local variables = { Variable = {}, Scope = {} }
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

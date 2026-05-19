@@ -327,8 +327,15 @@ function Errors:add_unknown_dot(w, name)
 end
 
 function Errors:fail_unresolved_labels(scope)
-   if scope.pending_labels then
-      for name, nodes in pairs(scope.pending_labels) do
+   if scope.pending_labels_beforelocalscope then
+      for name, nodes in pairs(scope.pending_labels_beforelocalscope) do
+         for _, node in ipairs(nodes) do
+            self:add(node, "no visible label '" .. name .. "' for goto")
+         end
+      end
+   end
+   if scope.pending_labels_afterlocalscope then
+      for name, nodes in pairs(scope.pending_labels_afterlocalscope) do
          for _, node in ipairs(nodes) do
             self:add(node, "no visible label '" .. name .. "' for goto")
          end

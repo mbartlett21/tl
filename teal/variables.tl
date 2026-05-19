@@ -37,7 +37,19 @@ local record variables
    record Scope
       vars: {string:Variable}
       labels: {string:Node}
-      pending_labels: {string:{Node}}
+
+      -- When goto is parsed, if the label hasn't been already seen, it is
+      -- added to pending_labels_beforelocalscope
+      pending_labels_beforelocalscope: {string:{Node}}
+
+      -- once a variable is declared, the goto is now jumping into the scope
+      -- and will fail, except if the label is the last statement in the block
+      pending_labels_afterlocalscope: {string:{Node}}
+
+      -- and so it is added to this table, which gets checked at the end
+      -- of the 'statements' node
+      labels_required_at_end: {string:{Node}}
+
       pending_nominals: {string:{NominalType}}
       pending_global_types: {string:boolean}
       narrows: {string:boolean}

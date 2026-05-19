@@ -672,7 +672,26 @@ function Context:widen_all(widens: {string:boolean}, widen_types: {string:Type})
    end
 end
 
+-- Called on all statements that aren't labels
+--
+-- It is also called by begin_scope, meaning that it isn't necessary to call
+-- it for blocks and function declarations
+function Context:mark_nonlabel_statement()
+   local st = self.st
+   local scope = st[#st]
+
+   if scope.labels_required_at_end then
+      for name, nodes in pairs(scope.labels_required_at_end) do
+         for _, n in ipairs(nodes) do
+            self.errs:add(n, "goto jumps into the scope of local variable")
+         end
+      end
+   end
+end
+
 function Context:begin_scope(node: Node)
+   self:mark_nonlabel_statement()
+
    table.insert(self.st, { vars = {} })
 
    if self.collector and node then
@@ -682,6 +701,28 @@ end
 
 function Context:begin_implied_scope()
    self:begin_scope(nil)
+end
+
+-- mark all current labels that are beforelocalscope as afterlocalscope
+function Context:mark_local_declaration()
+   local st = self.st
+   local scope = st[#st]
+
+   if scope.pending_labels_beforelocalscope then
+      if scope.pending_labels_afterlocalscope then
+         for name, nodes in pairs(scope.pending_labels_beforelocalscope) do
+            for _, n in ipairs(nodes) do
+               scope.pending_labels_afterlocalscope[name] = scope.pending_labels_afterlocalscope[name] or {}
+               table.insert(scope.pending_labels_afterlocalscope[name], n)
+            end
+         end
+      else
+         scope.pending_labels_afterlocalscope = scope.pending_labels_beforelocalscope
+      end
+      scope.pending_labels_beforelocalscope = nil
+   end
+
+   self:mark_nonlabel_statement()
 end
 
 function Context:end_scope(node: Node)
@@ -717,18 +758,38 @@ function Context:end_scope(node: Node)
       return
    end
 
-   if scope.pending_labels then
-      if next_scope.pending_labels then
-         for name, nodes in pairs(scope.pending_labels) do
+   if scope.pending_labels_beforelocalscope then
+      if next_scope.pending_labels_beforelocalscope then
+         for name, nodes in pairs(scope.pending_labels_beforelocalscope) do
             for _, n in ipairs(nodes) do
-               next_scope.pending_labels[name] = next_scope.pending_labels[name] or {}
-               table.insert(next_scope.pending_labels[name], n)
+               next_scope.pending_labels_beforelocalscope[name] = next_scope.pending_labels_beforelocalscope[name] or {}
+               table.insert(next_scope.pending_labels_beforelocalscope[name], n)
             end
          end
       else
-         next_scope.pending_labels = scope.pending_labels
+         next_scope.pending_labels_beforelocalscope = scope.pending_labels_beforelocalscope
       end
    end
+
+   -- if it is jumping to an outer block it is no longer necessarily jumping into the scope
+   -- of a variable, and so they are marked back as 'beforelocalscope'
+   if scope.pending_labels_afterlocalscope then
+      if next_scope.pending_labels_beforelocalscope then
+         for name, nodes in pairs(scope.pending_labels_afterlocalscope) do
+            for _, n in ipairs(nodes) do
+               next_scope.pending_labels_beforelocalscope[name] = next_scope.pending_labels_beforelocalscope[name] or {}
+               table.insert(next_scope.pending_labels_beforelocalscope[name], n)
+            end
+         end
+      else
+         next_scope.pending_labels_beforelocalscope = scope.pending_labels_afterlocalscope
+      end
+   end
+
+   -- scope.labels_required_at_end is ignored here
+   --
+   -- it is filled out when parsing the label, and checked at each statement after that and errors
+   -- are made at that point
 
    if scope.pending_nominals then
       if next_scope.pending_nominals then
@@ -775,7 +836,8 @@ function Context:commit_scope_transaction(node: Node)
    local next_scope = st[#st - 1]
 
    assert(scope.is_transaction)
-   assert(not scope.pending_labels)
+   assert(not scope.pending_labels_beforelocalscope)
+   assert(not scope.pending_labels_afterlocalscope)
    assert(not scope.pending_nominals)
 
    for name, var in pairs(scope.vars) do

@@ -813,6 +813,10 @@ visit_node.cbs = {
       end,
       after = function(self: Context, node: Node, _children: {Type}): Type
          self:dismiss_unresolved(node.var.tk)
+
+         -- TODO: This technically isn't required if the declaration is elided
+         -- in the output Lua
+         self:mark_local_declaration()
          return NONE
       end,
    },
@@ -854,6 +858,7 @@ visit_node.cbs = {
       end,
       before_exp = set_expected_types_to_decltuple,
       after = function(self: Context, node: Node, children: {Type}): Type
+         self:mark_local_declaration()
          local valtuple = children[3] as TupleType -- may be nil
 
          local encountered_close = false
@@ -913,6 +918,7 @@ visit_node.cbs = {
       before_exp = set_expected_types_to_decltuple,
       after = function(self: Context, node: Node, children: {Type}): Type
          local valtuple = children[3] as TupleType -- may be nil
+         if valtuple then self:mark_nonlabel_statement() end
 
          local infertypes = get_assignment_values(node, valtuple, #node.vars)
          for i, var in ipairs(node.vars) do
@@ -935,6 +941,7 @@ visit_node.cbs = {
    ["assignment"] = {
       before_exp = set_expected_types_to_decltuple,
       after = function(self: Context, node: Node, children: {Type}): Type
+         self:mark_nonlabel_statement()
          local vartuple = children[1]
          assert(vartuple is TupleType)
          local vartypes = vartuple.tuple
@@ -1052,14 +1059,33 @@ visit_node.cbs = {
             end
          end
 
-         --for i = #self.st, 1, -1 do
-            local scope = self.st[#self.st]
-            if scope.pending_labels and scope.pending_labels[label_id] then
-               node.used_label = true
-               scope.pending_labels[label_id] = nil
-               --break
+         local scope = self.st[#self.st]
+
+         -- The easy case. The goto doesn't appear to be jumping into the scope of a local variable
+         -- and the label exists
+         if scope.pending_labels_beforelocalscope and scope.pending_labels_beforelocalscope[label_id] then
+            node.used_label = true
+            scope.pending_labels_beforelocalscope[label_id] = nil
+         end
+
+         -- If the goto appears to be jumping over the scope of a local variable, we have to wait
+         -- till the next statement to verify that, since it is allowed to use a goto if there are
+         -- no non-label statements between the label and the end of the block
+         if scope.pending_labels_afterlocalscope and scope.pending_labels_afterlocalscope[label_id] then
+            node.used_label = true
+
+            -- Transfer the nodes relating to just this label into the labels_required_at_end table
+            local nodes_using_label = scope.pending_labels_afterlocalscope[label_id]
+            if scope.labels_required_at_end then
+               scope.labels_required_at_end[label_id] = scope.labels_required_at_end[label_id] or {}
+               for _, n in ipairs(nodes_using_label) do
+                  table.insert(scope.labels_required_at_end[label_id], n)
+               end
+            else
+               scope.labels_required_at_end = { [label_id] = scope.pending_labels_afterlocalscope[label_id] }
             end
-         --end
+            scope.pending_labels_afterlocalscope[label_id] = nil
+         end
       end,
       after = function(): Type
          return NONE
@@ -1067,6 +1093,10 @@ visit_node.cbs = {
    },
    ["goto"] = {
       after = function(self: Context, node: Node, _children: {Type}): Type
+         -- this is a statement that affects label jumping in PUC Lua, though it seems like
+         -- it shouldn't necessarily matter (but to have it not matter would require a bit more
+         -- computation with goto chains)
+         self:mark_nonlabel_statement()
          local label_id = node.label
          local found_label: Node
          for i = #self.st, 1, -1 do
@@ -1081,9 +1111,9 @@ visit_node.cbs = {
             found_label.used_label = true
          else
             local scope = self.st[#self.st]
-            scope.pending_labels = scope.pending_labels or {}
-            scope.pending_labels[label_id] = scope.pending_labels[label_id] or {}
-            table.insert(scope.pending_labels[label_id], node)
+            scope.pending_labels_beforelocalscope = scope.pending_labels_beforelocalscope or {}
+            scope.pending_labels_beforelocalscope[label_id] = scope.pending_labels_beforelocalscope[label_id] or {}
+            table.insert(scope.pending_labels_beforelocalscope[label_id], node)
          end
 
          return NONE
@@ -1192,6 +1222,7 @@ visit_node.cbs = {
    },
    ["return"] = {
       before = function(self: Context, node: Node)
+         self:mark_nonlabel_statement()
          local rets = self:find_var_type("@return")
          if rets and rets is TupleType then
             for i, exp in ipairs(node.exps) do
@@ -2352,7 +2383,10 @@ visit_node.cbs = {
 }
 
 visit_node.cbs["break"] = {
-   after = function(_self: Context, _node: Node, _children: {Type}): Type
+   after = function(self: Context, _node: Node, _children: {Type}): Type
+      -- this technically shouldn't matter with jumping into a scope, but PUC Lua
+      -- doesn't allow it.
+      self:mark_nonlabel_statement()
       return NONE
    end,
 }

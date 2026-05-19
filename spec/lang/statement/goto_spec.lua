@@ -89,13 +89,26 @@ describe("goto", function()
       { y = 1, msg = "no visible label 'my_label'" }
    }))
 
+   it("rejects a label with added variables", util.check_type_error([[
+      goto my_label
+      local a = 7
+      ::my_label::
+      print(a)
+   ]], {
+      { y = 1, msg = "goto jumps into the scope of local variable" }
+   }))
+
    it("accepts multiple labels", util.check([[
-      for i=1, 3 do
+      for i=1, 5 do
          if i <= 2 then
             goto continue
+         elseif i > 4 then
+            goto other
          end
-         print(i)
+         local j = i
+         print(j)
          ::continue::
+         ::other::
       end
 
       for i=1, 3 do
